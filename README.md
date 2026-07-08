@@ -70,6 +70,7 @@ class SmmTestHandler implements DgpDriverContract
         if ($config === null) {
             $res = new ConfigValidationResult(false);
             $res->addError('base_url', 'Base URL is required.');
+            $res->addError('api_key', 'API Key is required.');
             return $res;
         }
 
@@ -79,6 +80,9 @@ class SmmTestHandler implements DgpDriverContract
         }
         if (!$config->secret('api_key')) {
             $res->addError('api_key', 'API Key is required.');
+        }
+        if ($config->isSandbox() && !$config->filledOption('sandbox_user')) {
+            $res->addError('sandbox_user', 'Sandbox User is required in sandbox mode.');
         }
         return $res;
     }
@@ -99,6 +103,13 @@ class SmmTestHandler implements DgpDriverContract
         foreach (['api_key', 'token', 'password', 'secret'] as $key) {
             if (array_key_exists($key, $redacted)) {
                 $redacted[$key] = '[REDACTED]';
+            }
+        }
+
+        // Handle nested arrays
+        foreach ($redacted as $k => $v) {
+            if (is_array($v)) {
+                $redacted[$k] = $this->redactForLogs($v);
             }
         }
         return $redacted;
@@ -174,8 +185,13 @@ Order fulfillment transitions from **Initialization** to **Fulfillment** through
 
 ### 1. Initialize Order
 ```php
+use Elqora\Dgp\Configuration\Dgp;
 use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\RuntimeContext;
+use Elqora\Dgp\Runtime\References\HandlerReference;
+
+// Resolve the repository scoped to this handler:
+$repository = Dgp::runtimeRepository(HandlerReference::fromKey('smm-test'));
 
 $request = new InitializeRequest(
     orderId: 12345, // Host-managed order ID
@@ -198,6 +214,7 @@ if ($result->isSuccess()) {
 ### 2. Start Fulfillment
 ```php
 use Elqora\Dgp\Runtime\StartRequest;
+use Elqora\Dgp\Runtime\RuntimeContext;
 
 // Start Request references the persisted Plan ID
 $startRequest = new StartRequest(
@@ -221,16 +238,15 @@ if ($result->isSuccess()) {
 Handlers guide the host platform or user next steps through strongly-typed next actions.
 
 ```php
-use Elqora\Dgp\NextActions\NextAction;
-use Elqora\Dgp\NextActions\Specs\RedirectSpec;
+use Elqora\Dgp\Actions\RedirectAction;
+use Elqora\Dgp\Runtime\Plan;
 
 // Define a next action redirecting the customer to complete payment
-$nextAction = NextAction::redirect(new RedirectSpec(
+$nextAction = new RedirectAction(
     url: 'https://gateway.example/pay/invoice-88',
-    method: 'GET',
-    label: 'Complete Invoice Payment',
-    newTab: true
-));
+    external: true,
+    label: 'Complete Invoice Payment'
+);
 
 // Attach it to a Plan or StartResult DTO
 $plan = new Plan(
@@ -242,12 +258,17 @@ $plan = new Plan(
 );
 ```
 
-Available next actions include:
-- `Redirect`: External link transitions.
-- `Form`: Multi-field data submissions.
-- `Webhook`: Internal asynchronous events.
-- `Iframe` & `Popup` & `Popover`: Custom frontend components.
-- `CardPayment` & `BankTransfer` & `QrCode`: Transaction requirements.
+Available next action types include:
+- `RedirectAction` (`redirect`): External URL or page redirects.
+- `ButtonAction` (`button`): UI button triggers.
+- `FieldsAction` (`fields`): Dynamic form input submission requests.
+- `PopupAction` (`popup`): Modal overlays with custom UI entry points.
+- `PopoverAction` (`popover`): Embedded target popover view triggers.
+- `InlineAction` (`inline`): Embedded in-page block components.
+- `InstructionsAction` (`instructions`): Static or dynamic user-facing guide/text blocks.
+- `QrCodeAction` (`qr_code`): QR code payment or scanner prompts.
+- `TextAction` (`text`): Custom descriptive or notification text block.
+- `CustomAction` (`custom`): Generic action fallback for developer-defined extensions.
 
 ---
 
@@ -259,6 +280,6 @@ Verify that custom drivers conform to the specifications by running the automate
 # Run unit & compliance tests
 vendor/bin/phpunit
 
-# Perform static analysis at Level 8
-vendor/bin/phpstan analyse src tests --level=8
+# Perform static analysis
+vendor/bin/phpstan analyse
 ```
