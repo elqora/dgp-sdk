@@ -17,6 +17,8 @@ use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
 use Elqora\Dgp\Deliveries\FulfillmentDelivery;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
+use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockRuntimeRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerRuntimeRepository;
 
@@ -274,5 +276,73 @@ class RepositoryComplianceTest extends TestCase
         $this->assertEquals($plan2->id, $view->currentPlan->id);
         $this->assertNotNull($view->currentStartResult);
         $this->assertEquals($startResult->id, $view->currentStartResult->id);
+    }
+
+    public function testRepositoryPreservesDeliveryNextAction(): void
+    {
+        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
+        /** @var MockHandlerRuntimeRepository $repo */
+        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+
+        $redirectAction = new RedirectAction(
+            url: 'https://gateway.example/download',
+            external: true,
+            label: 'Download File'
+        );
+
+        // 1. Save plan with a delivery carrying a next action
+        $plan = new Plan(
+            id: null,
+            key: 'plan-1',
+            state: [],
+            deliveries: [
+                new InitializationDelivery(
+                    id: null,
+                    key: 'init-del',
+                    status: DeliveryStatus::PROCESSING,
+                    label: 'Init Doc',
+                    progress: null,
+                    planId: null,
+                    startId: null,
+                    nextAction: $redirectAction
+                )
+            ]
+        );
+
+        $savedPlan = $repo->savePlan(123, $plan)->value();
+        $this->assertNotNull($savedPlan);
+        $this->assertCount(1, $savedPlan->deliveries);
+        $this->assertNotNull($savedPlan->deliveries[0]->nextAction);
+        $action1 = $savedPlan->deliveries[0]->nextAction;
+        $this->assertInstanceOf(RedirectAction::class, $action1);
+        $this->assertEquals('https://gateway.example/download', $action1->url);
+
+        // 2. Fetch deliveries from repo
+        $fetched = $repo->deliveriesForPlan(123, new PlanReference(id: $savedPlan->id))->value();
+        $this->assertCount(1, $fetched);
+        $this->assertNotNull($fetched[0]->nextAction);
+        $action2 = $fetched[0]->nextAction;
+        $this->assertInstanceOf(RedirectAction::class, $action2);
+        $this->assertEquals('https://gateway.example/download', $action2->url);
+
+        // 3. Save deliveries directly via saveDeliveries()
+        $deliveryUpdate = new InitializationDelivery(
+            id: $fetched[0]->id,
+            key: 'init-del',
+            status: DeliveryStatus::COMPLETED,
+            label: 'Init Doc Finished',
+            progress: null,
+            planId: $savedPlan->id,
+            startId: null,
+            nextAction: null // Clear nextAction
+        );
+
+        $updatedList = $repo->saveDeliveries(123, [$deliveryUpdate])->value();
+        $this->assertCount(1, $updatedList);
+        $this->assertNull($updatedList[0]->nextAction);
+
+        // Fetch again to verify cleared in repo store
+        $fetchedUpdated = $repo->deliveriesForPlan(123, new PlanReference(id: $savedPlan->id))->value();
+        $this->assertNull($fetchedUpdated[0]->nextAction);
     }
 }

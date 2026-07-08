@@ -18,8 +18,20 @@ final class Hydrator
      */
     public static function hydrate(string $class, mixed $data): object
     {
-        if (!class_exists($class)) {
-            throw new InvalidArgumentException("Class {$class} does not exist.");
+        if ($class === \Elqora\Dgp\Actions\Contracts\NextAction::class) {
+            if (is_array($data) && isset($data['type'])) {
+                $concreteClass = self::resolveConcreteActionClass((string)$data['type']);
+                if ($concreteClass !== null) {
+                    /** @var class-string<T> $concreteClass */
+                    /** @var T $hydratedAction */
+                    $hydratedAction = self::hydrate($concreteClass, $data);
+                    return $hydratedAction;
+                }
+            }
+        }
+
+        if (!class_exists($class) && !interface_exists($class)) {
+            throw new InvalidArgumentException("Class or interface {$class} does not exist.");
         }
 
         $reflection = new ReflectionClass($class);
@@ -88,6 +100,8 @@ final class Hydrator
                 $typeName = $type->getName();
                 if ($value === null && $parameter->allowsNull()) {
                     $arguments[] = null;
+                } elseif (is_subclass_of($typeName, \BackedEnum::class)) {
+                    $arguments[] = $typeName::from($value);
                 } else {
                     $arguments[] = self::hydrate($typeName, $value);
                 }
@@ -112,7 +126,9 @@ final class Hydrator
             $arguments[] = $value;
         }
 
-        return $reflection->newInstanceArgs($arguments);
+        /** @var T $instance */
+        $instance = $reflection->newInstanceArgs($arguments);
+        return $instance;
     }
 
     /**
@@ -227,5 +243,22 @@ final class Hydrator
     private static function camelToSnake(string $string): string
     {
         return strtolower((string)preg_replace('/(?<!^)[A-Z]/', '_$0', $string));
+    }
+
+    private static function resolveConcreteActionClass(string $type): ?string
+    {
+        $map = [
+            'redirect' => \Elqora\Dgp\Actions\RedirectAction::class,
+            'custom' => \Elqora\Dgp\Actions\CustomAction::class,
+            'fields' => \Elqora\Dgp\Actions\FieldsAction::class,
+            'inline' => \Elqora\Dgp\Actions\InlineAction::class,
+            'instructions' => \Elqora\Dgp\Actions\InstructionsAction::class,
+            'popover' => \Elqora\Dgp\Actions\PopoverAction::class,
+            'popup' => \Elqora\Dgp\Actions\PopupAction::class,
+            'qr_code' => \Elqora\Dgp\Actions\QrCodeAction::class,
+            'text' => \Elqora\Dgp\Actions\TextAction::class,
+            'button' => \Elqora\Dgp\Actions\ButtonAction::class,
+        ];
+        return $map[$type] ?? null;
     }
 }

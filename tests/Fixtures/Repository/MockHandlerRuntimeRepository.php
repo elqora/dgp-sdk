@@ -173,6 +173,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                 label: $del->label,
                 progress: $del->progress,
                 planId: $planId,
+                nextAction: $del->nextAction,
                 meta: $del->meta
             );
 
@@ -360,6 +361,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                 label: $del->label,
                 progress: $del->progress,
                 startId: $startId,
+                nextAction: $del->nextAction,
                 meta: $del->meta
             );
 
@@ -567,6 +569,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                     label: $del->label,
                     progress: $del->progress,
                     planId: $parentId,
+                    nextAction: $del->nextAction,
                     meta: $del->meta
                 );
             } else {
@@ -577,6 +580,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                     label: $del->label,
                     progress: $del->progress,
                     startId: $parentId,
+                    nextAction: $del->nextAction,
                     meta: $del->meta
                 );
             }

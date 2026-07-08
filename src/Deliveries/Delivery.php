@@ -3,6 +3,7 @@
 namespace Elqora\Dgp\Deliveries;
 
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Dgp\Actions\Contracts\NextAction;
 use JsonSerializable;
 
 abstract readonly class Delivery implements Arrayable, JsonSerializable
@@ -19,6 +20,7 @@ abstract readonly class Delivery implements Arrayable, JsonSerializable
         public string|int|float|null $progress = null,
         public string|int|null $planId = null,
         public string|int|null $startId = null,
+        public ?NextAction $nextAction = null,
         public array $meta = [],
     ) {}
 
@@ -36,6 +38,7 @@ abstract readonly class Delivery implements Arrayable, JsonSerializable
             'progress' => $this->progress,
             'plan_id' => $this->planId,
             'start_id' => $this->startId,
+            'next_action' => $this->nextAction?->toArray(),
             'meta' => $this->meta,
         ];
     }

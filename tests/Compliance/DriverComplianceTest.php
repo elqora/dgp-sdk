@@ -22,6 +22,8 @@ use Elqora\Dgp\Catalog\Schemas\ServicePropsValidator;
 use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\StartRequest;
 use Elqora\Dgp\Runtime\RuntimeContext;
+use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\ConfigKit\Contracts\ProvidesConfigSchema;
 use Elqora\ConfigKit\Schema\ConfigSchema;
 use Elqora\ConfigKit\Schema\UiConfigSchema;
@@ -505,5 +507,65 @@ class DriverComplianceTest extends TestCase
 
         // Non-array returns unmodified
         $this->assertEquals('scalar-value', $handler->redactForLogs('scalar-value'));
+    }
+
+    public function testDeliveryNextActionIntegration(): void
+    {
+        $redirectAction = new RedirectAction(
+            url: 'https://gateway.example/download/file-abc',
+            external: true,
+            label: 'Download Key'
+        );
+
+        // 1. Delivery construction with no next action
+        $initNoAction = new InitializationDelivery(
+            id: null,
+            key: 'del-1',
+            status: DeliveryStatus::PENDING,
+            label: 'Task 1'
+        );
+        $this->assertNull($initNoAction->nextAction);
+        $this->assertNull($initNoAction->toArray()['next_action']);
+
+        // 2. Delivery construction with a next action
+        $initWithAction = new InitializationDelivery(
+            id: null,
+            key: 'del-2',
+            status: DeliveryStatus::PROCESSING,
+            label: 'Task 2',
+            progress: 50,
+            planId: 'plan-123',
+            startId: null,
+            nextAction: $redirectAction
+        );
+        $this->assertSame($redirectAction, $initWithAction->nextAction);
+
+        // 3. toArray() serialization
+        $serialized = $initWithAction->toArray();
+        $this->assertNotNull($serialized['next_action']);
+        $this->assertEquals('redirect', $serialized['next_action']['type']);
+        $this->assertEquals('https://gateway.example/download/file-abc', $serialized['next_action']['url']);
+
+        // 4. Hydration round-trip
+        $hydrated = Hydrator::hydrate(InitializationDelivery::class, $serialized);
+        $this->assertInstanceOf(InitializationDelivery::class, $hydrated);
+        $this->assertNotNull($hydrated->nextAction);
+        $this->assertInstanceOf(RedirectAction::class, $hydrated->nextAction);
+        $action = $hydrated->nextAction;
+        $this->assertEquals('redirect', $action->type());
+        $this->assertEquals('https://gateway.example/download/file-abc', $action->url);
+
+        // 5. FulfillmentDelivery construct and parent-constructor forwarding
+        $fulfillment = new FulfillmentDelivery(
+            id: null,
+            key: 'del-3',
+            status: DeliveryStatus::COMPLETED,
+            label: 'Task 3',
+            progress: null,
+            planId: null,
+            startId: 'start-abc',
+            nextAction: $redirectAction
+        );
+        $this->assertSame($redirectAction, $fulfillment->nextAction);
     }
 }

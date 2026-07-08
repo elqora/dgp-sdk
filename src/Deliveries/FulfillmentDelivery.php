@@ -3,6 +3,7 @@
 namespace Elqora\Dgp\Deliveries;
 
 use InvalidArgumentException;
+use Elqora\Dgp\Actions\Contracts\NextAction;
 
 final readonly class FulfillmentDelivery extends Delivery
 {
@@ -17,6 +18,7 @@ final readonly class FulfillmentDelivery extends Delivery
         string|int|float|null $progress = null,
         ?string $planId = null,
         string|int|null $startId = null,
+        ?NextAction $nextAction = null,
         array $meta = [],
     ) {
         if ($planId !== null) {
@@ -32,6 +34,7 @@ final readonly class FulfillmentDelivery extends Delivery
             progress: $progress,
             planId: null,
             startId: $startId,
+            nextAction: $nextAction,
             meta: $meta
         );
     }
