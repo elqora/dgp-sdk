@@ -4,8 +4,45 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "dacf417f255b42f8d994f7c710387eb1",
+    "content-hash": "f91e61256a00c960f7057c528967a7c4",
     "packages": [
+        {
+            "name": "elqora/chart",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/elqora/chart.git",
+                "reference": "c6faa0d243fe4cef220a73c837ee8aa88b491913"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/elqora/chart/zipball/c6faa0d243fe4cef220a73c837ee8aa88b491913",
+                "reference": "c6faa0d243fe4cef220a73c837ee8aa88b491913",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Elqora\\Chart\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Framework-neutral, renderer-agnostic chart data definitions for PHP.",
+            "support": {
+                "issues": "https://github.com/elqora/chart/issues",
+                "source": "https://github.com/elqora/chart/tree/1.0.0"
+            },
+            "time": "2026-07-09T01:49:41+00:00"
+        },
         {
             "name": "elqora/config-kit",
             "version": "1.0.0",

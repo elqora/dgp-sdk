@@ -7,18 +7,29 @@ use JsonSerializable;
 
 final readonly class HandlerService implements Arrayable, JsonSerializable
 {
+    public ServiceCapabilitySet $capabilities;
+    public ServiceMeta $meta;
+
     /**
-     * @param list<string> $capabilities
-     * @param array<string, mixed> $meta
+     * @param ServiceCapabilitySet|array<string, ServiceCapability|string|array<string, mixed>>|list<ServiceCapability|string|array<string, mixed>> $capabilities
+     * @param ServiceMeta|array<string, mixed>|null $meta
      */
     public function __construct(
         public string|int $id,
         public string $name,
         public ?string $description = null,
         public ?string $category = null,
-        public array $capabilities = [],
-        public array $meta = [],
-    ) {}
+        public ?float $rate = null,
+        public int $min = 1,
+        public int $max = 1,
+        ServiceCapabilitySet|array $capabilities = [],
+        ServiceMeta|array|null $meta = null,
+    ) {
+        $this->capabilities = $capabilities instanceof ServiceCapabilitySet
+            ? $capabilities
+            : new ServiceCapabilitySet($capabilities);
+        $this->meta = $meta instanceof ServiceMeta ? $meta : ServiceMeta::from($meta);
+    }
 
     /**
      * @return array<string, mixed>
@@ -30,8 +41,11 @@ final readonly class HandlerService implements Arrayable, JsonSerializable
             'name' => $this->name,
             'description' => $this->description,
             'category' => $this->category,
-            'capabilities' => $this->capabilities,
-            'meta' => $this->meta,
+            'rate' => $this->rate,
+            'min' => $this->min,
+            'max' => $this->max,
+            'capabilities' => $this->capabilities->toArray(),
+            'meta' => $this->meta->toArray(),
         ];
     }
 

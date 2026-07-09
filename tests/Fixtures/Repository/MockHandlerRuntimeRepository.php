@@ -19,7 +19,6 @@ use Elqora\Dgp\Deliveries\Delivery;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
 use Elqora\Dgp\Deliveries\FulfillmentDelivery;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
-use InvalidArgumentException;
 
 class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
 {

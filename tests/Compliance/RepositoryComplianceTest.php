@@ -3,9 +3,21 @@
 namespace Elqora\Dgp\Tests\Compliance;
 
 use PHPUnit\Framework\TestCase;
+use Elqora\Chart\Charts\Chart;
+use Elqora\Chart\Data\TabularData;
+use Elqora\Chart\Enums\ChartType;
+use Elqora\Chart\Enums\ValueType;
+use Elqora\Chart\Series\Series;
 use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Catalog\Services\HandlerService;
 use Elqora\Dgp\Errors\DgpConfigurationException;
+use Elqora\Dgp\Insights\Analysis;
+use Elqora\Dgp\Insights\Leaderboard;
+use Elqora\Dgp\Insights\LeaderboardEntry;
+use Elqora\Dgp\Insights\Scoreboard;
+use Elqora\Dgp\Insights\ScoreboardItem;
 use Elqora\Dgp\Runtime\References\HandlerReference;
+use Elqora\Dgp\Runtime\References\DeliveryReference;
 use Elqora\Dgp\Runtime\References\PlanReference;
 use Elqora\Dgp\Runtime\References\StartResultReference;
 use Elqora\Dgp\Runtime\Plan;
@@ -21,17 +33,43 @@ use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockRuntimeRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerRuntimeRepository;
+use Elqora\Dgp\Tests\Fixtures\Repository\MockServicesRepository;
+use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerServicesRepository;
+use Elqora\Dgp\Tests\Fixtures\Repository\MockDeliveriesRepository;
+use Elqora\Dgp\Tests\Fixtures\Repository\MockInsightsRepository;
+use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerInsightsRepository;
 
 class RepositoryComplianceTest extends TestCase
 {
+    private function chartFixture(string $key = 'delivery.throughput'): Chart
+    {
+        return new Chart(
+            key: $key,
+            type: ChartType::LINE,
+            title: 'Delivery throughput',
+            data: new TabularData(
+                categoryField: 'time',
+                rows: [
+                    ['time' => '10:00', 'delivered' => 10],
+                    ['time' => '10:30', 'delivered' => 25],
+                ],
+                series: [
+                    new Series('delivered', 'Delivered', 'delivered', ValueType::INTEGER),
+                ],
+            ),
+        );
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
-        // Reset registered repository
+        // Reset registered repositories
         $ref = new \ReflectionClass(Dgp::class);
-        $prop = $ref->getProperty('runtimeRepository');
-        $prop->setAccessible(true);
-        $prop->setValue(null);
+        foreach (['runtimeRepository', 'servicesRepository', 'deliveriesRepository', 'insightsRepository'] as $property) {
+            $prop = $ref->getProperty($property);
+            $prop->setAccessible(true);
+            $prop->setValue(null, null);
+        }
     }
 
     public function testNotRegisteredThrowsCustomConfigurationException(): void
@@ -344,5 +382,163 @@ class RepositoryComplianceTest extends TestCase
         // Fetch again to verify cleared in repo store
         $fetchedUpdated = $repo->deliveriesForPlan(123, new PlanReference(id: $savedPlan->id))->value();
         $this->assertNull($fetchedUpdated[0]->nextAction);
+    }
+
+    public function testRuntimeRepositoryDoesNotExposeServiceStorageOrInsightHooks(): void
+    {
+        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
+        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+
+        $this->assertFalse(method_exists($repo, 'enable'));
+        $this->assertFalse(method_exists($repo, 'upsertService'));
+        $this->assertFalse(method_exists($repo, 'upsertServices'));
+        $this->assertFalse(method_exists($repo, 'updateAnalyses'));
+        $this->assertFalse(method_exists($repo, 'updateScoreboard'));
+        $this->assertFalse(method_exists($repo, 'updateLeaderboard'));
+    }
+
+    public function testServiceStateUpdatesRequireReasonAndRemainHandlerScoped(): void
+    {
+        $store = (new MockRuntimeRepository())->store;
+        $servicesRepo = new MockServicesRepository($store);
+        $servicesRepo->seedServices(HandlerReference::fromKey('jap'), [
+            new HandlerService(101, 'Premium delivery', category: 'delivery', rate: 12.5, min: 100, max: 10000, capabilities: ['refill'], meta: ['region' => 'global']),
+            new HandlerService(102, 'Standard delivery', category: 'delivery', rate: 8.0, min: 50, max: 5000, meta: ['region' => 'global']),
+            new HandlerService(103, 'Risky delivery', category: 'delivery', rate: 4.0, min: 10, max: 1000, meta: ['region' => 'local']),
+        ]);
+        Dgp::registerServicesRepository($servicesRepo);
+        /** @var MockHandlerServicesRepository $japRepo */
+        $japRepo = Dgp::servicesRepository(HandlerReference::fromKey('jap'));
+        /** @var MockHandlerServicesRepository $smmRepo */
+        $smmRepo = Dgp::servicesRepository(HandlerReference::fromKey('smm'));
+
+        $this->assertFalse(method_exists($japRepo, 'upsertService'));
+        $this->assertFalse(method_exists($japRepo, 'upsertServices'));
+        $this->assertEquals('Premium delivery', $japRepo->findService(101)->value()?->name);
+        $this->assertEquals(100, $japRepo->findService(101)->value()?->min);
+        $this->assertTrue($japRepo->findService(101)->value()?->capabilities->enabled('refill') ?? false);
+        $this->assertCount(2, $japRepo->services(new \Elqora\Dgp\Catalog\Services\ServiceQuery(filters: ['region' => 'global']))->value());
+
+        $this->assertTrue($japRepo->enable(101, 'Provider confirmed availability.')->isSuccess());
+        $this->assertTrue($japRepo->disable(102, 'Upstream maintenance.')->isSuccess());
+        $this->assertTrue($japRepo->lock(103, 'Investigating inconsistent delivery.')->isSuccess());
+        $this->assertTrue($japRepo->unlock(103, 'Delivery metrics recovered.')->isSuccess());
+
+        $state = $japRepo->serviceState(103);
+        $this->assertNotNull($state);
+        $this->assertEquals('unlocked', $state['state']);
+        $this->assertEquals('Delivery metrics recovered.', $state['reason']);
+        $this->assertNull($smmRepo->serviceState(103));
+
+        $emptyReason = $japRepo->disable(104, '   ');
+        $this->assertTrue($emptyReason->isFailure());
+        $error = $emptyReason->error();
+        $this->assertNotNull($error);
+        $this->assertEquals('service_state_reason_required', $error->code);
+    }
+
+    public function testInsightUpdatesStoreHandlerScopedSnapshots(): void
+    {
+        $store = (new MockRuntimeRepository())->store;
+        Dgp::registerInsightsRepository(new MockInsightsRepository($store));
+        /** @var MockHandlerInsightsRepository $japRepo */
+        $japRepo = Dgp::insightsRepository(HandlerReference::fromKey('jap'));
+        /** @var MockHandlerInsightsRepository $smmRepo */
+        $smmRepo = Dgp::insightsRepository(HandlerReference::fromKey('smm'));
+
+        $analyses = [
+            new Analysis('delivery.throughput', $this->chartFixture()),
+            new Analysis('delivery.latency', $this->chartFixture('delivery.latency')),
+        ];
+        $scoreboard = new Scoreboard([
+            new ScoreboardItem('delivery.success-rate', 98.5, 'Success rate', unit: '%'),
+            new ScoreboardItem('delivery.average-time', 42, 'Average time', unit: 'seconds'),
+        ]);
+        $leaderboard = new Leaderboard([
+            new LeaderboardEntry(101, 1, 99.2, 'Premium delivery'),
+            new LeaderboardEntry(102, 2, 96.1, 'Standard delivery'),
+        ]);
+
+        $this->assertTrue($japRepo->updateAnalyses($analyses)->isSuccess());
+        $this->assertTrue($japRepo->updateScoreboard($scoreboard)->isSuccess());
+        $this->assertTrue($japRepo->updateLeaderboard($leaderboard)->isSuccess());
+
+        $this->assertCount(2, $japRepo->analysesSnapshot());
+        $this->assertEquals('delivery.latency', $japRepo->analysesSnapshot()[1]->analysisKey);
+        $this->assertSame($scoreboard, $japRepo->scoreboardSnapshot());
+        $this->assertSame($leaderboard, $japRepo->leaderboardSnapshot());
+
+        $this->assertCount(0, $smmRepo->analysesSnapshot());
+        $this->assertNull($smmRepo->scoreboardSnapshot());
+        $this->assertNull($smmRepo->leaderboardSnapshot());
+
+        $replacement = new Scoreboard([
+            new ScoreboardItem('delivery.success-rate', 99.1, 'Success rate', unit: '%'),
+        ]);
+        $this->assertTrue($japRepo->updateScoreboard($replacement)->isSuccess());
+        $this->assertSame($replacement, $japRepo->scoreboardSnapshot());
+        $this->assertCount(1, $japRepo->scoreboardSnapshot()->items);
+    }
+
+    public function testInsightAnalysisUpdatesRejectDuplicateKeys(): void
+    {
+        $store = (new MockRuntimeRepository())->store;
+        Dgp::registerInsightsRepository(new MockInsightsRepository($store));
+        /** @var MockHandlerInsightsRepository $repo */
+        $repo = Dgp::insightsRepository(HandlerReference::fromKey('jap'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Analysis key values must be unique.');
+
+        $repo->updateAnalyses([
+            new Analysis('delivery.throughput', $this->chartFixture()),
+            new Analysis('delivery.throughput', $this->chartFixture()),
+        ]);
+    }
+
+    public function testDeliveriesRepositoryReadsPersistedHandlerDeliveries(): void
+    {
+        $runtimeRepository = new MockRuntimeRepository();
+        Dgp::registerRuntimeRepository($runtimeRepository);
+        Dgp::registerDeliveriesRepository(new MockDeliveriesRepository($runtimeRepository->store));
+
+        $runtime = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+        $deliveries = Dgp::deliveriesRepository(HandlerReference::fromKey('jap'));
+        $otherDeliveries = Dgp::deliveriesRepository(HandlerReference::fromKey('smm'));
+
+        $plan = $runtime->savePlan(
+            123,
+            new Plan(
+                null,
+                'plan-1',
+                [],
+                [
+                    new InitializationDelivery(
+                        id: null,
+                        key: 'init-del',
+                        status: DeliveryStatus::PROCESSING,
+                        label: 'Init Doc',
+                    ),
+                ]
+            )
+        )->value();
+        $this->assertNotNull($plan);
+        $this->assertCount(1, $plan->deliveries);
+
+        $delivery = $plan->deliveries[0];
+        $this->assertNotNull($delivery->id);
+
+        $foundById = $deliveries->findDelivery(new DeliveryReference(id: $delivery->id))->value();
+        $this->assertNotNull($foundById);
+        $this->assertEquals('init-del', $foundById->key);
+
+        $foundByKey = $deliveries->findDelivery(new DeliveryReference(key: 'init-del'))->value();
+        $this->assertNotNull($foundByKey);
+        $this->assertEquals($delivery->id, $foundByKey->id);
+
+        $this->assertCount(1, $deliveries->deliveries(new DeliveryQuery(status: DeliveryStatus::PROCESSING))->value());
+        $this->assertCount(1, $deliveries->deliveries(new DeliveryQuery(active: true))->value());
+        $this->assertCount(0, $deliveries->deliveries(new DeliveryQuery(status: DeliveryStatus::COMPLETED))->value());
+        $this->assertCount(0, $otherDeliveries->deliveries()->value());
     }
 }

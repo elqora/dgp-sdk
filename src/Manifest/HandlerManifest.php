@@ -3,6 +3,7 @@
 namespace Elqora\Dgp\Manifest;
 
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Dgp\Support\StableIdentifier;
 use JsonSerializable;
 
 final readonly class HandlerManifest implements Arrayable, JsonSerializable
@@ -15,6 +16,8 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
      * @param array<string, mixed> $limitations
      * @param array<string, mixed> $featureFlags
      * @param array<string, mixed> $meta
+     * @param list<AnalysisDefinition> $analyses
+     * @param list<ScoreboardItemDefinition> $scoreboardItems
      */
     public function __construct(
         public string $key,
@@ -28,7 +31,20 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
         public array $limitations = [],
         public array $featureFlags = [],
         public array $meta = [],
-    ) {}
+        public array $analyses = [],
+        public array $scoreboardItems = [],
+        public bool $providesLeaderboard = false,
+    ) {
+        StableIdentifier::assertUnique(
+            array_map(fn (AnalysisDefinition $analysis) => $analysis->key, $this->analyses),
+            'Analysis definition key'
+        );
+
+        StableIdentifier::assertUnique(
+            array_map(fn (ScoreboardItemDefinition $item) => $item->key, $this->scoreboardItems),
+            'Scoreboard item definition key'
+        );
+    }
 
     /**
      * @return array<string, mixed>
@@ -47,6 +63,9 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
             'limitations' => $this->limitations,
             'feature_flags' => $this->featureFlags,
             'meta' => $this->meta,
+            'analyses' => array_map(fn (AnalysisDefinition $analysis) => $analysis->toArray(), $this->analyses),
+            'scoreboard_items' => array_map(fn (ScoreboardItemDefinition $item) => $item->toArray(), $this->scoreboardItems),
+            'provides_leaderboard' => $this->providesLeaderboard,
         ];
     }
 

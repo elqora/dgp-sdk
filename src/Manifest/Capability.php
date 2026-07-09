@@ -11,4 +11,5 @@ enum Capability: string
     case SERVICE_SCHEMA_CATALOG = 'service_schema_catalog';
     case WEBHOOKS = 'webhooks';
     case PRIVATE_ASSETS = 'private_assets';
+    case SERVICE_INSIGHTS = 'service_insights';
 }

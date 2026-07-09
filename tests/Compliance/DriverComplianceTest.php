@@ -3,9 +3,26 @@
 namespace Elqora\Dgp\Tests\Compliance;
 
 use PHPUnit\Framework\TestCase;
+use Elqora\Chart\Charts\Chart;
+use Elqora\Chart\Data\TabularData;
+use Elqora\Chart\Enums\ChartType;
+use Elqora\Chart\Enums\ValueType;
+use Elqora\Chart\Series\Series;
+use Elqora\Dgp\Catalog\Services\HandlerService;
+use Elqora\Dgp\Catalog\Services\ServiceCapability;
+use Elqora\Dgp\Catalog\Services\ServiceCapabilitySet;
+use Elqora\Dgp\Catalog\Services\ServiceMeta;
+use Elqora\Dgp\Insights\Analysis;
+use Elqora\Dgp\Insights\Leaderboard;
+use Elqora\Dgp\Insights\LeaderboardEntry;
+use Elqora\Dgp\Insights\Scoreboard;
+use Elqora\Dgp\Insights\ScoreboardItem;
+use Elqora\Dgp\Manifest\AnalysisDefinition;
 use Elqora\Dgp\Tests\Fixtures\Handlers\SmmTestHandler;
 use Elqora\Dgp\Tests\Fixtures\Handlers\ManualTestHandler;
 use Elqora\Dgp\Manifest\Capability;
+use Elqora\Dgp\Manifest\HandlerManifest;
+use Elqora\Dgp\Manifest\ScoreboardItemDefinition;
 use Elqora\Dgp\Catalog\Schemas\Contracts\ServiceSchemaCatalogContract;
 use Elqora\Dgp\Ui\Contracts\UiManifestContract;
 use Elqora\Dgp\Events\Contracts\WebhookContract;
@@ -33,6 +50,25 @@ use InvalidArgumentException;
 
 class DriverComplianceTest extends TestCase
 {
+    private function chartFixture(): Chart
+    {
+        return new Chart(
+            key: 'delivery.throughput',
+            type: ChartType::LINE,
+            title: 'Delivery throughput',
+            data: new TabularData(
+                categoryField: 'time',
+                rows: [
+                    ['time' => '10:00', 'delivered' => 10],
+                    ['time' => '10:30', 'delivered' => 25],
+                ],
+                series: [
+                    new Series('delivered', 'Delivered', 'delivered', ValueType::INTEGER),
+                ],
+            ),
+        );
+    }
+
     public function testSmmHandlerCapabilityMatching(): void
     {
         $handler = new SmmTestHandler();
@@ -63,6 +99,164 @@ class DriverComplianceTest extends TestCase
 
         $this->assertContains(Capability::SERVICE_SCHEMA_CATALOG, $capabilities);
         $this->assertInstanceOf(ServiceSchemaCatalogContract::class, $handler);
+    }
+
+    public function testHandlerServiceRoundTripAndCapabilityUpgrade(): void
+    {
+        $service = new HandlerService(
+            id: 101,
+            name: 'Premium delivery',
+            description: 'Fast delivery service',
+            category: 'delivery',
+            rate: 12.5,
+            min: 100,
+            max: 10000,
+            capabilities: new ServiceCapabilitySet(
+                [
+                    new ServiceCapability('refill', true, 'Supports refill.'),
+                    new ServiceCapability('cancel', false, 'Cancellation unavailable.'),
+                ]
+            ),
+            meta: new ServiceMeta(
+                raw: ['provider_payload' => ['id' => '101']],
+                derived: ['region' => 'global'],
+            ),
+        );
+
+        $serialized = Hydrator::serialize($service);
+        $this->assertEquals(12.5, $serialized['rate']);
+        $this->assertEquals(100, $serialized['min']);
+        $this->assertEquals(10000, $serialized['max']);
+        $this->assertTrue($serialized['capabilities']['refill']['enabled']);
+        $this->assertEquals('global', $serialized['meta']['derived']['region']);
+
+        $hydrated = Hydrator::hydrate(HandlerService::class, $serialized);
+        $this->assertTrue(Hydrator::compare($service, $hydrated));
+        $this->assertTrue($hydrated->capabilities->enabled('refill'));
+        $this->assertEquals('global', $hydrated->meta->getAny('region'));
+    }
+
+    public function testHandlerServiceLegacyConstructorInputStillWorks(): void
+    {
+        $service = new HandlerService(
+            id: 101,
+            name: 'Legacy service',
+            category: 'delivery',
+            capabilities: ['refill'],
+            meta: ['region' => 'global'],
+        );
+
+        $this->assertNull($service->rate);
+        $this->assertEquals(1, $service->min);
+        $this->assertEquals(1, $service->max);
+        $this->assertTrue($service->capabilities->enabled('refill'));
+        $this->assertEquals('global', $service->meta->getAny('region'));
+    }
+
+    public function testServiceInsightsManifestRoundTrip(): void
+    {
+        $manifest = new HandlerManifest(
+            key: 'smm-test',
+            name: 'SMM Test',
+            version: '1.0.0',
+            capabilities: [Capability::SERVICE_INSIGHTS],
+            analyses: [
+                new AnalysisDefinition('delivery.throughput', 'Delivery throughput', 'Orders delivered over time.'),
+            ],
+            scoreboardItems: [
+                new ScoreboardItemDefinition('delivery.success-rate', 'Success rate'),
+            ],
+            providesLeaderboard: true,
+        );
+
+        $serialized = Hydrator::serialize($manifest);
+
+        $this->assertEquals('service_insights', $serialized['capabilities'][0]);
+        $this->assertEquals('delivery.throughput', $serialized['analyses'][0]['key']);
+        $this->assertEquals('delivery.success-rate', $serialized['scoreboard_items'][0]['key']);
+        $this->assertTrue($serialized['provides_leaderboard']);
+
+        $hydrated = Hydrator::hydrate(HandlerManifest::class, $serialized);
+        $this->assertTrue(Hydrator::compare($manifest, $hydrated));
+    }
+
+    public function testServiceInsightsManifestRejectsDuplicateKeys(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Analysis definition key values must be unique.');
+
+        new HandlerManifest(
+            key: 'smm-test',
+            name: 'SMM Test',
+            version: '1.0.0',
+            analyses: [
+                new AnalysisDefinition('delivery.throughput', 'Delivery throughput'),
+                new AnalysisDefinition('delivery.throughput', 'Delivery throughput again'),
+            ],
+        );
+    }
+
+    public function testServiceInsightDtosRoundTripWithElqoraChart(): void
+    {
+        $analysis = new Analysis('delivery.throughput', $this->chartFixture());
+        $scoreboard = new Scoreboard([
+            new ScoreboardItem(
+                key: 'delivery.success-rate',
+                value: 98.5,
+                title: 'Success rate',
+                unit: '%',
+            ),
+        ]);
+        $leaderboard = new Leaderboard([
+            new LeaderboardEntry(
+                serviceId: 101,
+                rank: 1,
+                score: 99.2,
+                title: 'Premium delivery',
+            ),
+        ]);
+
+        $hydratedAnalysis = Hydrator::hydrate(Analysis::class, Hydrator::serialize($analysis));
+        $hydratedScoreboard = Hydrator::hydrate(Scoreboard::class, Hydrator::serialize($scoreboard));
+        $hydratedLeaderboard = Hydrator::hydrate(Leaderboard::class, Hydrator::serialize($leaderboard));
+
+        $this->assertTrue(Hydrator::compare($analysis, $hydratedAnalysis));
+        $this->assertTrue(Hydrator::compare($scoreboard, $hydratedScoreboard));
+        $this->assertTrue(Hydrator::compare($leaderboard, $hydratedLeaderboard));
+    }
+
+    public function testDeclaredInsightKeysMatchRuntimeUpdateKeys(): void
+    {
+        $manifest = new HandlerManifest(
+            key: 'smm-test',
+            name: 'SMM Test',
+            version: '1.0.0',
+            analyses: [
+                new AnalysisDefinition('delivery.throughput', 'Delivery throughput'),
+            ],
+            scoreboardItems: [
+                new ScoreboardItemDefinition('delivery.success-rate', 'Success rate'),
+            ],
+        );
+
+        $analysis = new Analysis('delivery.throughput', $this->chartFixture());
+        $scoreboard = new Scoreboard([
+            new ScoreboardItem('delivery.success-rate', 98.5),
+        ]);
+
+        $declaredAnalyses = array_map(fn (AnalysisDefinition $definition) => $definition->key, $manifest->analyses);
+        $declaredScoreboardItems = array_map(fn (ScoreboardItemDefinition $definition) => $definition->key, $manifest->scoreboardItems);
+
+        $this->assertContains($analysis->analysisKey, $declaredAnalyses);
+        $this->assertContains($scoreboard->items[0]->key, $declaredScoreboardItems);
+    }
+
+    public function testServiceInsightDtosRejectUnstableKeys(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Scoreboard item key must be a stable identifier.');
+
+        new ScoreboardItem('not a stable key', 10);
     }
 
     public function testPlanRoundTripAndStability(): void

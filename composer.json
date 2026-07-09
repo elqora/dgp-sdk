@@ -5,6 +5,7 @@
     "type": "library",
     "require": {
         "php": ">=8.2",
+        "elqora/chart": "^1.0",
         "elqora/config-kit": "^1.0"
     },
     "require-dev": {

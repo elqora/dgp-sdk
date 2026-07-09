@@ -280,6 +280,142 @@ Verify that custom drivers conform to the specifications by running the automate
 # Run unit & compliance tests
 vendor/bin/phpunit
 
+# Run a specific compliance file
+vendor/bin/phpunit tests/Compliance/RepositoryComplianceTest.php
+
 # Perform static analysis
 vendor/bin/phpstan analyse
+```
+
+The current `phpunit.xml` defines a single `DGP SDK Test Suite`; `vendor/bin/phpunit --testsuite Compliance` is not a valid suite name.
+
+---
+
+## Service Insights
+
+Handlers can declare service insights in their manifest and push current insight snapshots through the handler-scoped services repository. The SDK models the protocol only; hosts remain responsible for persistence, filtering, configuration, authorization, and deciding which declared insights should be retained or displayed.
+
+### Manifest declaration
+
+```php
+use Elqora\Dgp\Manifest\AnalysisDefinition;
+use Elqora\Dgp\Manifest\Capability;
+use Elqora\Dgp\Manifest\HandlerManifest;
+use Elqora\Dgp\Manifest\ScoreboardItemDefinition;
+
+$manifest = new HandlerManifest(
+    key: 'smm-test',
+    name: 'SMM Test',
+    version: '1.0.0',
+    capabilities: [Capability::SERVICE_INSIGHTS],
+    analyses: [
+        new AnalysisDefinition(
+            key: 'delivery.throughput',
+            title: 'Delivery throughput',
+            description: 'Orders delivered over time.'
+        ),
+    ],
+    scoreboardItems: [
+        new ScoreboardItemDefinition(
+            key: 'delivery.success-rate',
+            title: 'Success rate'
+        ),
+    ],
+    providesLeaderboard: true,
+);
+```
+
+Analysis and scoreboard keys are stable identifiers and are serialized in the manifest so runtime updates can be matched reliably by key.
+
+### Runtime updates
+
+Analyses use `elqora/chart` directly. DGP does not define a separate chart model.
+
+```php
+use Elqora\Chart\Charts\Charts;
+use Elqora\Chart\Enums\ValueType;
+use Elqora\Chart\Series\Series;
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Insights\Analysis;
+use Elqora\Dgp\Insights\Leaderboard;
+use Elqora\Dgp\Insights\LeaderboardEntry;
+use Elqora\Dgp\Insights\Scoreboard;
+use Elqora\Dgp\Insights\ScoreboardItem;
+use Elqora\Dgp\Runtime\References\HandlerReference;
+
+$insights = Dgp::insightsRepository(HandlerReference::fromKey('smm-test'));
+
+$chart = Charts::line(
+    key: 'delivery.throughput',
+    title: 'Delivery throughput',
+    category: 'time',
+    rows: [
+        ['time' => '10:00', 'delivered' => 10],
+        ['time' => '10:30', 'delivered' => 25],
+    ],
+    series: [
+        new Series('delivered', 'Delivered', 'delivered', ValueType::INTEGER),
+    ],
+);
+
+$insights->updateAnalyses([
+    new Analysis('delivery.throughput', $chart),
+]);
+
+$insights->updateScoreboard(new Scoreboard([
+    new ScoreboardItem(
+        key: 'delivery.success-rate',
+        value: 98.5,
+        title: 'Success rate',
+        unit: '%',
+    ),
+]));
+
+$insights->updateLeaderboard(new Leaderboard([
+    new LeaderboardEntry(
+        serviceId: 101,
+        rank: 1,
+        score: 99.2,
+        title: 'Premium delivery',
+    ),
+]));
+```
+
+### Service state updates
+
+The handler-scoped services repository reads catalog services and receives individual service state changes. Each state change requires a non-empty reason.
+
+```php
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Runtime\References\HandlerReference;
+
+$services = Dgp::servicesRepository(HandlerReference::fromKey('smm-test'));
+
+$service = $services->findService(101)->value();
+
+$services->enable(101, 'Provider confirmed availability.');
+$services->disable(102, 'Upstream maintenance.');
+$services->lock(103, 'Investigating inconsistent delivery.');
+$services->unlock(103, 'Delivery metrics recovered.');
+```
+
+### Delivery access
+
+Handlers can resolve a separate deliveries repository when they need to inspect persisted progress data for analytics or insight calculation.
+
+```php
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Deliveries\DeliveryStatus;
+use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
+use Elqora\Dgp\Runtime\References\DeliveryReference;
+use Elqora\Dgp\Runtime\References\HandlerReference;
+
+$deliveries = Dgp::deliveriesRepository(HandlerReference::fromKey('smm-test'));
+
+$delivery = $deliveries->findDelivery(new DeliveryReference(key: 'init-del'))->value();
+
+$active = $deliveries->deliveries(new DeliveryQuery(
+    status: DeliveryStatus::PROCESSING,
+    active: true,
+))->value();
 ```

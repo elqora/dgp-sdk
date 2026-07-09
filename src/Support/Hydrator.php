@@ -18,6 +18,31 @@ final class Hydrator
      */
     public static function hydrate(string $class, mixed $data): object
     {
+        if ($class === \Elqora\Dgp\Catalog\Services\ServiceCapabilitySet::class) {
+            if (!is_array($data)) {
+                throw new InvalidArgumentException('Service capability set data must be an array.');
+            }
+
+            $capabilities = [];
+            foreach ($data as $capability) {
+                $capabilities[] = self::hydrate(\Elqora\Dgp\Catalog\Services\ServiceCapability::class, $capability);
+            }
+
+            /** @var T $capabilitySet */
+            $capabilitySet = new \Elqora\Dgp\Catalog\Services\ServiceCapabilitySet($capabilities);
+            return $capabilitySet;
+        }
+
+        if ($class === \Elqora\Chart\Charts\Chart::class) {
+            if (!is_array($data)) {
+                throw new InvalidArgumentException('Chart data must be an array.');
+            }
+
+            /** @var T $chart */
+            $chart = \Elqora\Chart\Charts\Chart::fromArray($data);
+            return $chart;
+        }
+
         if ($class === \Elqora\Dgp\Actions\Contracts\NextAction::class) {
             if (is_array($data) && isset($data['type'])) {
                 $concreteClass = self::resolveConcreteActionClass((string)$data['type']);
@@ -111,11 +136,15 @@ final class Hydrator
             // Check if collection parameter
             if ($type instanceof ReflectionNamedType && $type->getName() === 'array' && is_array($value)) {
                 $collectionType = self::getCollectionType($docComment, $name, $class);
-                if ($collectionType !== null && class_exists($collectionType)) {
+                if ($collectionType !== null && (class_exists($collectionType) || enum_exists($collectionType))) {
                     /** @var class-string<object> $collectionType */
                     $hydratedList = [];
                     foreach ($value as $item) {
-                        $hydratedList[] = self::hydrate($collectionType, $item);
+                        if (is_subclass_of($collectionType, \BackedEnum::class)) {
+                            $hydratedList[] = $collectionType::from($item);
+                        } else {
+                            $hydratedList[] = self::hydrate($collectionType, $item);
+                        }
                     }
                     $arguments[] = $hydratedList;
                     continue;
@@ -223,18 +252,21 @@ final class Hydrator
         if (class_exists($typeName)) {
             return $typeName;
         }
+        if (enum_exists($typeName)) {
+            return $typeName;
+        }
         // Try namespace of declaring class
         $reflection = new ReflectionClass($declaringClass);
         $namespace = $reflection->getNamespaceName();
         if ($namespace !== '') {
             $namespaced = $namespace . '\\' . $typeName;
-            if (class_exists($namespaced)) {
+            if (class_exists($namespaced) || enum_exists($namespaced)) {
                 return $namespaced;
             }
         }
         // Try prefixing with root namespace
         $rootNamespaced = 'Elqora\\Dgp\\' . $typeName;
-        if (class_exists($rootNamespaced)) {
+        if (class_exists($rootNamespaced) || enum_exists($rootNamespaced)) {
             return $rootNamespaced;
         }
         return $typeName;
