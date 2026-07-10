@@ -11,6 +11,7 @@ use InvalidArgumentException;
 final readonly class Charge implements Arrayable, JsonSerializable
 {
     /**
+     * @param list<ChargePayment> $payments
      * @param array<string, mixed> $meta
      */
     public function __construct(
@@ -22,6 +23,7 @@ final readonly class Charge implements Arrayable, JsonSerializable
         public ChargeStatus $status,
         public ?Money $paidAmount = null,
         public ?Money $balanceDue = null,
+        public array $payments = [],
         public ?string $dueAt = null,
         public ?string $paidAt = null,
         public ?NextAction $nextAction = null,
@@ -49,6 +51,7 @@ final readonly class Charge implements Arrayable, JsonSerializable
             'status' => $this->status->value,
             'paid_amount' => $this->paidAmount?->toArray(),
             'balance_due' => $this->balanceDue?->toArray(),
+            'payments' => array_map(fn (ChargePayment $payment) => $payment->toArray(), $this->payments),
             'due_at' => $this->dueAt,
             'paid_at' => $this->paidAt,
             'next_action' => $this->nextAction?->toArray(),

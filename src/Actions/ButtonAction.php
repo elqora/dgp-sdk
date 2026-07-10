@@ -3,23 +3,25 @@
 namespace Elqora\Dgp\Actions;
 
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use InvalidArgumentException;
 
 final readonly class ButtonAction implements NextAction
 {
     /**
+     * @param list<ActionButton> $buttons
      * @param array<string, mixed> $meta
      */
     public function __construct(
-        public string $value,
-        public string $kind,
+        public array $buttons,
         public ?string $label = null,
-        public ?string $icon = null,
-        public string $style = 'default',
-        public ?string $tooltip = null,
-        public bool $disabled = false,
-        public ?string $disabledReason = null,
         public array $meta = [],
-    ) {}
+    ) {
+        $errors = ActionValidator::validateButtons($buttons);
+
+        if ($errors !== []) {
+            throw new InvalidArgumentException(reset($errors));
+        }
+    }
 
     public function type(): string
     {
@@ -33,14 +35,8 @@ final readonly class ButtonAction implements NextAction
     {
         return [
             'type' => $this->type(),
-            'value' => $this->value,
-            'kind' => $this->kind,
             'label' => $this->label,
-            'icon' => $this->icon,
-            'style' => $this->style,
-            'tooltip' => $this->tooltip,
-            'disabled' => $this->disabled,
-            'disabled_reason' => $this->disabledReason,
+            'buttons' => array_map(fn (ActionButton $button) => $button->toArray(), $this->buttons),
             'meta' => $this->meta,
         ];
     }

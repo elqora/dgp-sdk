@@ -21,6 +21,7 @@ final readonly class Plan implements Arrayable, JsonSerializable
         public ?NextAction $nextAction = null,
         public array $meta = [],
         public int $revision = 0,
+        public string|int|null $orderId = null,
     ) {}
 
     /**
@@ -36,6 +37,7 @@ final readonly class Plan implements Arrayable, JsonSerializable
             'next_action' => $this->nextAction?->toArray(),
             'meta' => $this->meta,
             'revision' => $this->revision,
+            'order_id' => $this->orderId,
         ];
     }
 

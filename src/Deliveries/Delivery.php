@@ -17,12 +17,20 @@ abstract readonly class Delivery implements Arrayable, JsonSerializable
         public DeliveryStage $stage,
         public DeliveryStatus $status,
         public string $label,
-        public string|int|float|null $progress = null,
+        mixed $progress = null,
         public string|int|null $planId = null,
         public string|int|null $startId = null,
         public ?NextAction $nextAction = null,
         public array $meta = [],
-    ) {}
+        public string $kind = 'default',
+        public ?string $name = null,
+        public bool $isPublic = true,
+        public ?string $note = null,
+    ) {
+        $this->progress = DeliveryProgress::fromValue($progress);
+    }
+
+    public ?DeliveryProgress $progress;
 
     /**
      * @return array<string, mixed>
@@ -35,7 +43,11 @@ abstract readonly class Delivery implements Arrayable, JsonSerializable
             'stage' => $this->stage->value,
             'status' => $this->status->value,
             'label' => $this->label,
-            'progress' => $this->progress,
+            'kind' => $this->kind,
+            'name' => $this->name,
+            'is_public' => $this->isPublic,
+            'note' => $this->note,
+            'progress' => $this->progress?->toArray(),
             'plan_id' => $this->planId,
             'start_id' => $this->startId,
             'next_action' => $this->nextAction?->toArray(),

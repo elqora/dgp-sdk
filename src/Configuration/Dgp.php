@@ -14,6 +14,8 @@ use Elqora\Dgp\Insights\Contracts\HandlerInsightsRepositoryContract;
 use Elqora\Dgp\Runtime\Contracts\RuntimeRepositoryContract;
 use Elqora\Dgp\Runtime\Contracts\HandlerRuntimeRepositoryContract;
 use Elqora\Dgp\Runtime\References\HandlerReference;
+use Elqora\Dgp\Endpoints\HostEndpoint;
+use Elqora\Dgp\Endpoints\HostEndpointType;
 
 final class Dgp
 {
@@ -39,6 +41,36 @@ final class Dgp
     public static function path(string $handler, string $purpose): string
     {
         return self::getEndpointPrefix() . '/' . urlencode($handler) . '/' . ltrim($purpose, '/');
+    }
+
+    public static function endpoint(
+        string $handler,
+        HostEndpointType $type,
+        ?string $asset = null,
+    ): HostEndpoint {
+        $parameters = [];
+        $purpose = match ($type) {
+            HostEndpointType::DELIVERY_ACTION => 'delivery/action',
+            HostEndpointType::DELIVERY_UPDATE => 'delivery/update',
+            HostEndpointType::GENERIC_ACTION => 'generic/action',
+            HostEndpointType::BULK_ACTION => 'bulk/action',
+            HostEndpointType::CHARGE_UPDATE => 'charge/update',
+            HostEndpointType::CHARGE_STATE => 'charge/state',
+            HostEndpointType::WEBHOOK => 'webhook',
+            HostEndpointType::MANAGEMENT_REFRESH => 'management/refresh',
+            HostEndpointType::PRIVATE_ASSET => 'assets/' . rawurlencode((string) $asset),
+        };
+
+        if ($type === HostEndpointType::PRIVATE_ASSET) {
+            $parameters['asset'] = $asset;
+        }
+
+        return new HostEndpoint(
+            type: $type,
+            handler: $handler,
+            path: self::path($handler, $purpose),
+            parameters: $parameters,
+        );
     }
 
     public static function registerRuntimeRepository(

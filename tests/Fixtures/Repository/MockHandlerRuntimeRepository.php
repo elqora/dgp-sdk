@@ -173,7 +173,11 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                 progress: $del->progress,
                 planId: $planId,
                 nextAction: $del->nextAction,
-                meta: $del->meta
+                meta: $del->meta,
+                kind: $del->kind,
+                name: $del->name,
+                isPublic: $del->isPublic,
+                note: $del->note,
             );
 
             // Save to store
@@ -188,7 +192,8 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
             deliveries: $persistedDeliveries,
             nextAction: $plan->nextAction,
             meta: $plan->meta,
-            revision: $nextRevision
+            revision: $nextRevision,
+            orderId: $orderId,
         );
 
         $planRecord = [
@@ -361,7 +366,11 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                 progress: $del->progress,
                 startId: $startId,
                 nextAction: $del->nextAction,
-                meta: $del->meta
+                meta: $del->meta,
+                kind: $del->kind,
+                name: $del->name,
+                isPublic: $del->isPublic,
+                note: $del->note,
             );
 
             $this->storeDelivery($orderId, $startId, $persistedDel);
@@ -569,7 +578,11 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                     progress: $del->progress,
                     planId: $parentId,
                     nextAction: $del->nextAction,
-                    meta: $del->meta
+                    meta: $del->meta,
+                    kind: $del->kind,
+                    name: $del->name,
+                    isPublic: $del->isPublic,
+                    note: $del->note,
                 );
             } else {
                 $persistedDel = new FulfillmentDelivery(
@@ -580,7 +593,11 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                     progress: $del->progress,
                     startId: $parentId,
                     nextAction: $del->nextAction,
-                    meta: $del->meta
+                    meta: $del->meta,
+                    kind: $del->kind,
+                    name: $del->name,
+                    isPublic: $del->isPublic,
+                    note: $del->note,
                 );
             }
 

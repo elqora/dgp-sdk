@@ -39,8 +39,34 @@ use Elqora\Dgp\Catalog\Schemas\ServicePropsValidator;
 use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\StartRequest;
 use Elqora\Dgp\Runtime\RuntimeContext;
+use Elqora\Dgp\Runtime\References\PlanReference;
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\ActionButtonKind;
+use Elqora\Dgp\Actions\ActionButtonStyle;
+use Elqora\Dgp\Actions\ActionTarget;
+use Elqora\Dgp\Actions\ActionTargetType;
+use Elqora\Dgp\Actions\ButtonAction;
+use Elqora\Dgp\Actions\Contracts\GenericActionContract;
+use Elqora\Dgp\Actions\GenericActionRequest;
 use Elqora\Dgp\Actions\RedirectAction;
+use Elqora\Dgp\Bulk\CancelBulkRequest;
+use Elqora\Dgp\Bulk\Contracts\BulkActionContract;
+use Elqora\Dgp\Bulk\RefreshBulkRequest;
+use Elqora\Dgp\Bulk\RetryBulkRequest;
+use Elqora\Dgp\Bulk\StartBulkRequest;
+use Elqora\Dgp\Charges\Charge;
+use Elqora\Dgp\Charges\ChargePayment;
+use Elqora\Dgp\Charges\ChargePaymentStatus;
+use Elqora\Dgp\Charges\ChargeStatus;
+use Elqora\Dgp\Money\Amount;
+use Elqora\Dgp\Money\Currency;
+use Elqora\Dgp\Money\Money;
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Deliveries\DeliveryProgress;
+use Elqora\Dgp\Endpoints\HostEndpointType;
+use Elqora\Dgp\Events\DgpEvent;
+use Elqora\Dgp\Events\EventType;
 use Elqora\ConfigKit\Contracts\ProvidesConfigSchema;
 use Elqora\ConfigKit\Schema\ConfigSchema;
 use Elqora\ConfigKit\Schema\UiConfigSchema;
@@ -88,6 +114,9 @@ class DriverComplianceTest extends TestCase
         } else {
             $this->assertNotInstanceOf(UiManifestContract::class, $handler);
         }
+
+        $this->assertInstanceOf(BulkActionContract::class, $handler);
+        $this->assertInstanceOf(GenericActionContract::class, $handler);
     }
 
     public function testManualHandlerCapabilityMatching(): void
@@ -264,15 +293,18 @@ class DriverComplianceTest extends TestCase
         $plan = new Plan(
             id: null,
             key: 'plan-123',
-            state: ['reserved' => true]
+            state: ['reserved' => true],
+            orderId: 123,
         );
 
         $serialized = Hydrator::serialize($plan);
         $this->assertNull($serialized['id']);
         $this->assertEquals('plan-123', $serialized['key']);
+        $this->assertEquals(123, $serialized['order_id']);
 
         $hydrated = Hydrator::hydrate(Plan::class, $serialized);
         $this->assertTrue(Hydrator::compare($plan, $hydrated));
+        $this->assertEquals(123, $hydrated->orderId);
 
         // Hydrated with a persisted ID
         $serialized['id'] = 456;
@@ -342,6 +374,86 @@ class DriverComplianceTest extends TestCase
             planId: 'plan-abc',
             startId: 'start-xyz'
         );
+    }
+
+    public function testDeliveryRenderingFieldsAndProgressHydration(): void
+    {
+        $init = new InitializationDelivery(
+            id: null,
+            key: 'init-1',
+            status: DeliveryStatus::PROCESSING,
+            label: 'Review',
+            progress: 50,
+            kind: 'admin_review',
+            name: 'Admin Review',
+            isPublic: false,
+            note: 'Internal preparation'
+        );
+
+        $serialized = Hydrator::serialize($init);
+        $this->assertEquals('admin_review', $serialized['kind']);
+        $this->assertEquals('Admin Review', $serialized['name']);
+        $this->assertFalse($serialized['is_public']);
+        $this->assertEquals('Internal preparation', $serialized['note']);
+        $this->assertEquals(50.0, $serialized['progress']['percent']);
+
+        $hydrated = Hydrator::hydrate(InitializationDelivery::class, [
+            ...$serialized,
+            'progress' => [
+                'current' => 25,
+                'target' => 100,
+                'percent' => 25,
+                'unit' => 'items',
+                'label' => '25 of 100',
+            ],
+        ]);
+
+        $this->assertInstanceOf(DeliveryProgress::class, $hydrated->progress);
+        $this->assertEquals(25, $hydrated->progress->current);
+        $this->assertEquals(100, $hydrated->progress->target);
+        $this->assertEquals('items', $hydrated->progress->unit);
+    }
+
+    public function testTypedHostEndpointResolutionKeepsGenericPath(): void
+    {
+        Dgp::endpointPrefix('/dgp');
+
+        $endpoint = Dgp::endpoint('smm-test', HostEndpointType::DELIVERY_ACTION);
+        $this->assertSame(HostEndpointType::DELIVERY_ACTION, $endpoint->type);
+        $this->assertEquals('/dgp/smm-test/delivery/action', $endpoint->path);
+
+        $generic = Dgp::endpoint('smm-test', HostEndpointType::GENERIC_ACTION);
+        $this->assertSame(HostEndpointType::GENERIC_ACTION, $generic->type);
+        $this->assertEquals('/dgp/smm-test/generic/action', $generic->path);
+
+        $bulk = Dgp::endpoint('smm-test', HostEndpointType::BULK_ACTION);
+        $this->assertSame(HostEndpointType::BULK_ACTION, $bulk->type);
+        $this->assertEquals('/dgp/smm-test/bulk/action', $bulk->path);
+
+        $asset = Dgp::endpoint('smm-test', HostEndpointType::PRIVATE_ASSET, 'invoice.pdf');
+        $this->assertEquals('/dgp/smm-test/assets/invoice.pdf', $asset->path);
+        $this->assertEquals('invoice.pdf', $asset->parameters['asset']);
+
+        $this->assertEquals('/dgp/smm-test/custom/action', Dgp::path('smm-test', 'custom/action'));
+    }
+
+    public function testDgpEventSupportsBuiltInEnumAndCustomStringTypes(): void
+    {
+        $builtIn = new DgpEvent(
+            id: 'event-1',
+            type: EventType::INITIALIZED,
+            handlerKey: 'smm-test',
+            orderId: 123
+        );
+        $this->assertEquals('initialized', $builtIn->toArray()['type']);
+
+        $custom = new DgpEvent(
+            id: 'event-2',
+            type: 'provider.custom_event',
+            handlerKey: 'smm-test',
+            orderId: 123
+        );
+        $this->assertEquals('provider.custom_event', $custom->toArray()['type']);
     }
 
     public function testOrderSnapshotRoundTripFixture(): void
@@ -563,19 +675,153 @@ class DriverComplianceTest extends TestCase
     public function testStartRequestRoundTrip(): void
     {
         $request = new StartRequest(
-            planId: 'plan-123',
-            runtimeContext: new RuntimeContext(
+            orderId: 123,
+            plan: new PlanReference(id: 'plan-123'),
+            context: new RuntimeContext(
                 context: ['foo' => 'bar']
-            )
+            ),
+            meta: ['source' => 'admin']
         );
 
         $serialized = Hydrator::serialize($request);
-        $this->assertEquals('plan-123', $serialized['planId']);
+        $this->assertEquals(123, $serialized['order_id']);
+        $this->assertEquals('plan-123', $serialized['plan']['id']);
 
         $hydrated = Hydrator::hydrate(StartRequest::class, $serialized);
-        $this->assertEquals('plan-123', $hydrated->planId);
-        $this->assertNotNull($hydrated->runtimeContext);
-        $this->assertEquals(['foo' => 'bar'], $hydrated->runtimeContext->context);
+        $this->assertEquals(123, $hydrated->orderId);
+        $this->assertEquals('plan-123', $hydrated->plan->id);
+        $this->assertNotNull($hydrated->context);
+        $this->assertEquals(['foo' => 'bar'], $hydrated->context->context);
+        $this->assertEquals(['source' => 'admin'], $hydrated->meta);
+    }
+
+    public function testGenericActionRequestRoundTrip(): void
+    {
+        $request = new GenericActionRequest(
+            handlerKey: 'smm-test',
+            actionValue: 'retry_selected',
+            targets: [
+                new ActionTarget(ActionTargetType::ORDER, 123),
+                new ActionTarget(ActionTargetType::CHARGE, 456, key: 'deposit'),
+                new ActionTarget('provider.custom_target', 'target-1'),
+            ],
+            input: ['reason' => 'manual_retry'],
+            context: new RuntimeContext(context: ['actor' => 'admin']),
+            meta: ['trace' => 'bulk-1']
+        );
+
+        $serialized = Hydrator::serialize($request);
+        $this->assertEquals('retry_selected', $serialized['action_value']);
+        $this->assertEquals('order', $serialized['targets'][0]['type']);
+        $this->assertEquals('charge', $serialized['targets'][1]['type']);
+        $this->assertEquals('provider.custom_target', $serialized['targets'][2]['type']);
+
+        $hydrated = Hydrator::hydrate(GenericActionRequest::class, $serialized);
+        $this->assertEquals('smm-test', $hydrated->handlerKey);
+        $this->assertCount(3, $hydrated->targets);
+        $this->assertEquals('charge', $hydrated->targets[1]->type);
+        $this->assertEquals(['actor' => 'admin'], $hydrated->context?->context);
+    }
+
+    public function testExplicitBulkRequestRoundTrips(): void
+    {
+        $targets = [
+            new ActionTarget(ActionTargetType::ORDER, 123),
+            new ActionTarget(ActionTargetType::PLAN, 456),
+        ];
+
+        $start = new StartBulkRequest(
+            handlerKey: 'smm-test',
+            targets: $targets,
+            input: ['source' => 'admin'],
+            context: new RuntimeContext(context: ['actor' => 'admin'])
+        );
+
+        $hydrated = Hydrator::hydrate(StartBulkRequest::class, Hydrator::serialize($start));
+        $this->assertEquals('smm-test', $hydrated->handlerKey);
+        $this->assertCount(2, $hydrated->targets);
+        $this->assertEquals('plan', $hydrated->targets[1]->type);
+
+        $handler = new SmmTestHandler();
+        $this->assertTrue($handler->startBulk($start)->isSuccess());
+        $this->assertTrue($handler->cancelBulk(new CancelBulkRequest('smm-test', $targets))->isSuccess());
+        $this->assertTrue($handler->retryBulk(new RetryBulkRequest('smm-test', $targets))->isSuccess());
+        $this->assertTrue($handler->refreshBulk(new RefreshBulkRequest('smm-test', $targets))->isSuccess());
+    }
+
+    public function testButtonActionRepresentsValidatedButtonGroup(): void
+    {
+        $action = new ButtonAction(
+            buttons: [
+                new ActionButton(
+                    value: 'cancel',
+                    kind: ActionButtonKind::TEXT,
+                    label: 'Cancel',
+                    style: ActionButtonStyle::DANGER
+                ),
+                new ActionButton(
+                    value: 'refresh',
+                    kind: ActionButtonKind::ICON,
+                    icon: 'refresh-cw',
+                    tooltip: 'Refresh'
+                ),
+            ],
+            label: 'Available actions'
+        );
+
+        $serialized = Hydrator::serialize($action);
+        $this->assertEquals('button', $serialized['type']);
+        $this->assertCount(2, $serialized['buttons']);
+        $this->assertEquals('text', $serialized['buttons'][0]['kind']);
+        $this->assertEquals('icon', $serialized['buttons'][1]['kind']);
+
+        $hydrated = Hydrator::hydrate(ButtonAction::class, $serialized);
+        $this->assertTrue(Hydrator::compare($action, $hydrated));
+    }
+
+    public function testButtonActionRejectsInvalidButtonPayloads(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Text buttons require a label.');
+
+        new ActionButton(
+            value: 'approve',
+            kind: ActionButtonKind::TEXT
+        );
+    }
+
+    public function testChargePaymentHistoryRoundTrip(): void
+    {
+        $payment = new ChargePayment(
+            key: 'payment-1',
+            amount: new Money(new Amount('25.00'), new Currency('USD')),
+            status: ChargePaymentStatus::PAID,
+            paidAt: '2026-07-09T10:00:00Z',
+            method: 'wallet',
+            reference: 'txn-123',
+            meta: ['gateway' => 'internal']
+        );
+
+        $charge = new Charge(
+            id: null,
+            key: 'deposit',
+            deliveryKey: 'init-review',
+            label: 'Deposit',
+            amount: new Money(new Amount('100.00'), new Currency('USD')),
+            status: ChargeStatus::PARTIALLY_PAID,
+            paidAmount: new Money(new Amount('25.00'), new Currency('USD')),
+            balanceDue: new Money(new Amount('75.00'), new Currency('USD')),
+            payments: [$payment]
+        );
+
+        $serialized = Hydrator::serialize($charge);
+        $this->assertCount(1, $serialized['payments']);
+        $this->assertEquals('paid', $serialized['payments'][0]['status']);
+        $this->assertEquals('txn-123', $serialized['payments'][0]['reference']);
+
+        $hydrated = Hydrator::hydrate(Charge::class, $serialized);
+        $this->assertTrue(Hydrator::compare($charge, $hydrated));
+        $this->assertSame(ChargePaymentStatus::PAID, $hydrated->payments[0]->status);
     }
 
     public function testDriverContractProvidesConfigSchema(): void

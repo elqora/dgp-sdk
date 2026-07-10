@@ -15,11 +15,15 @@ final readonly class FulfillmentDelivery extends Delivery
         string $key,
         DeliveryStatus $status,
         string $label,
-        string|int|float|null $progress = null,
+        mixed $progress = null,
         ?string $planId = null,
         string|int|null $startId = null,
         ?NextAction $nextAction = null,
         array $meta = [],
+        string $kind = 'default',
+        ?string $name = null,
+        bool $isPublic = true,
+        ?string $note = null,
     ) {
         if ($planId !== null) {
             throw new InvalidArgumentException('FulfillmentDelivery cannot have a planId.');
@@ -35,7 +39,11 @@ final readonly class FulfillmentDelivery extends Delivery
             planId: null,
             startId: $startId,
             nextAction: $nextAction,
-            meta: $meta
+            meta: $meta,
+            kind: $kind,
+            name: $name,
+            isPublic: $isPublic,
+            note: $note,
         );
     }
 }

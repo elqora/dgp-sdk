@@ -1,349 +1,420 @@
 # DGP SDK
 
-DGP (Digital Product) SDK is a framework-neutral protocol and core toolkit for digital product implementations. It enables developers to implement structured, sandboxed plugins (handlers) that interact with host platforms through stable, strongly-typed contracts.
+DGP SDK is a framework-neutral protocol and core toolkit for digital-service handlers. A handler exposes services that a host can initialize, charge, start, fulfill, update, act on in bulk, and manage through stable contracts.
 
-DGP is a framework-neutral core with minimal external dependencies, integrating `elqora/config-kit` for configuration management.
+The package is intentionally framework-neutral. It defines protocol shapes, DTOs, contracts, enums, validators, hydrators, and deterministic helper APIs. It does not prescribe a database, ORM, queue, transaction model, routing layer, or rendering layer.
 
----
-
-## 📦 Installation
-
-Add the package to your `composer.json` file:
+## Installation
 
 ```bash
 composer require elqora/dgp-sdk
 ```
 
----
+## Responsibility Split
 
-## 🚀 Architectural Overview
+The SDK defines:
 
-Handlers (drivers) implement the root `DgpDriverContract` which aggregates semantic sub-contracts.
+- Contracts
+- DTOs
+- Enums
+- Endpoint path helpers
+- Validators
+- Hydrators
+- Protocol shapes
 
-```
+The host implements:
+
+- Persistence
+- Routing
+- Storage
+- Payment records
+- Broadcasting
+- Rendering
+
+The handler implements:
+
+- Service catalog
+- Balance reporting
+- Initialization
+- Start
+- Synchronization
+- Cancellation
+- Actions
+- Charges
+- Management
+
+## Driver Contract
+
+Handlers implement `DgpDriverContract`, which aggregates the mandatory protocol contracts:
+
+```text
 DgpDriverContract
-├── ManifestContract              # Driver description and capabilities
-├── ConfigSchemaContract          # Config schema, validation, & log redaction
-├── HealthContract                # Operational health checks
-├── BalanceContract               # Provider account balance monitoring
-├── ServicesContract             # Service definition and price queries
-├── RuntimeContract               # Order lifecycle execution (initialize, start, etc.)
-├── OrderDeliveriesContract       # Progress and delivery tracking
-└── OrderManagementContract       # Post-order actions and management views
+  ManifestContract
+  ConfigSchemaContract
+  HealthContract
+  BalanceContract
+  ServicesContract
+  RuntimeContract
+  OrderDeliveriesContract
+  OrderManagementContract
+  GenericActionContract
+  BulkActionContract
 ```
 
----
+Optional capabilities such as service schema catalogs, webhooks, UI contributions, private assets, and insights are modeled as separate contracts or capability declarations.
 
-## 🛠️ Configuration & Schemas
+## Host-Provided Ports
 
-DGP utilizes `elqora/config-kit` for structured configuration. Implementing handlers declare fields, validate inputs, project safe public properties, and redact logs.
+The SDK may define repositories and stores as host-provided ports. The SDK defines the interface; the host provides the implementation.
 
-### Example Configuration Schema in SMM Handler:
+Examples:
+
+- `RuntimeRepositoryContract` resolves a handler-scoped runtime port.
+- `HandlerRuntimeRepositoryContract` can save and read plans, start results, and deliveries.
+- `ServicesRepositoryContract` resolves handler-scoped service catalog/state access.
+- `DeliveriesRepositoryContract` exposes persisted delivery lookups.
+- `InsightsRepositoryContract` exposes insight snapshot updates.
+
+These ports may include write operations, but the SDK still owns no storage backend. A host can implement them with SQL, files, queues, remote APIs, memory, or any other storage model.
+
+## Configuration
+
+DGP uses `elqora/config-kit` for structured configuration. Handlers can declare config fields, validate inputs, expose safe public config, and redact sensitive values.
 
 ```php
-use Elqora\ConfigKit\Schema\ConfigSchema;
-use Elqora\ConfigKit\Schema\UiConfigSchema;
 use Elqora\ConfigKit\Schema\ConfigField;
+use Elqora\ConfigKit\Schema\ConfigSchema;
 use Elqora\ConfigKit\Support\ConfigBag;
 use Elqora\ConfigKit\Support\ConfigValidationResult;
-use Elqora\Dgp\Contracts\DgpDriverContract;
 
-class SmmTestHandler implements DgpDriverContract
+public function configSchema(): ?ConfigSchema
 {
-    public function configSchema(): ?ConfigSchema
-    {
-        return new ConfigSchema([
-            new ConfigField(name: 'base_url', label: 'Base URL', required: true),
-            new ConfigField(name: 'api_key', label: 'API Key', required: true, secret: true),
-            new ConfigField(name: 'timeout', label: 'Timeout', type: 'number', required: false, default: 30),
-            new ConfigField(name: 'sandbox_user', label: 'Sandbox User', required: false, sandbox: true),
-        ]);
+    return new ConfigSchema([
+        new ConfigField(name: 'base_url', label: 'Base URL', required: true),
+        new ConfigField(name: 'api_key', label: 'API Key', required: true, secret: true),
+    ]);
+}
+
+public function validateConfig(?ConfigBag $config = null): ConfigValidationResult
+{
+    if ($config === null || !$config->filledOption('base_url') || !$config->secret('api_key')) {
+        $result = new ConfigValidationResult(false);
+        $result->addError('base_url', 'Base URL and API key are required.');
+
+        return $result;
     }
 
-    public function uiConfigSchema(): ?UiConfigSchema
-    {
-        return $this->configSchema()?->toUiConfigSchema();
-    }
-
-    public function validateConfig(?ConfigBag $config = null): ConfigValidationResult
-    {
-        if ($config === null) {
-            $res = new ConfigValidationResult(false);
-            $res->addError('base_url', 'Base URL is required.');
-            $res->addError('api_key', 'API Key is required.');
-            return $res;
-        }
-
-        $res = new ConfigValidationResult(true);
-        if (!$config->filledOption('base_url')) {
-            $res->addError('base_url', 'Base URL is required.');
-        }
-        if (!$config->secret('api_key')) {
-            $res->addError('api_key', 'API Key is required.');
-        }
-        if ($config->isSandbox() && !$config->filledOption('sandbox_user')) {
-            $res->addError('sandbox_user', 'Sandbox User is required in sandbox mode.');
-        }
-        return $res;
-    }
-
-    public function publicConfig(?ConfigBag $config = null): array
-    {
-        // Excludes secrets, exposing options safely to dashboard pages
-        return $config?->toPublicArray() ?? [];
-    }
-
-    public function redactForLogs(mixed $payload): mixed
-    {
-        if (!is_array($payload)) {
-            return $payload;
-        }
-
-        $redacted = $payload;
-        foreach (['api_key', 'token', 'password', 'secret'] as $key) {
-            if (array_key_exists($key, $redacted)) {
-                $redacted[$key] = '[REDACTED]';
-            }
-        }
-
-        // Handle nested arrays
-        foreach ($redacted as $k => $v) {
-            if (is_array($v)) {
-                $redacted[$k] = $this->redactForLogs($v);
-            }
-        }
-        return $redacted;
-    }
-    
-    // ... rest of DgpDriverContract methods
+    return ConfigValidationResult::ok();
 }
 ```
 
----
+## Order Snapshots
 
-## 🛒 Order Snapshots & Fallback Resolution
-
-An `OrderSnapshot` describes what was selected in the frontend checkout. The handler uses this snapshot to execute provisioning.
-
-### Fallback Service Lookup:
+`OrderSnapshot` is the semantic description of what the customer ordered. Host identity such as `orderId` and execution context such as `RuntimeContext` are useful runtime metadata, but the snapshot remains the resolved order description.
 
 ```php
 use Elqora\Dgp\Snapshots\OrderSnapshot;
 
-// A snapshot payload maps fallback relations
 $snapshot = OrderSnapshot::fromArray([
     'version' => '1',
     'mode' => 'prod',
     'builtAt' => '2026-07-07T10:30:00.000Z',
     'selection' => ['tag' => 'tag:instagram-likes', 'buttons' => [], 'fields' => []],
-    'inputs' => ['form' => [], 'selections' => []],
+    'inputs' => ['form' => ['quantity' => 1000], 'selections' => []],
     'quantity' => 1000,
     'quantitySource' => ['kind' => 'fixed'],
     'min' => 100,
     'max' => 10000,
     'services' => [101, 103],
-    'serviceMap' => [],
+    'serviceMap' => ['option:quality-ultra' => [103]],
     'utilities' => [],
-    'fallbacks' => [
-        'global' => [
-            103 => [106, 108],
-        ],
-        'nodes' => [
-            103 => [
-                'option:ultra' => [104, 106],
-            ]
-        ]
-    ]
 ]);
 
-// Resolve fallback replacement IDs with node precedence:
-$fallbacks = $snapshot->fallbacksFor(103, 'option:ultra');
-// Returns: [104, 106, 108] (Node-specific 104 & 106 first, then global 108, deduplicated)
+$quantity = $snapshot->quantity();
+$services = $snapshot->servicesForNode('option:quality-ultra');
 ```
 
----
+## Runtime Lifecycle
 
-## ⏳ Order Lifecycle & Persistence
+Initialization receives the host order identity, the resolved snapshot, and optional runtime context.
 
-Order fulfillment transitions from **Initialization** to **Fulfillment** through the repository.
-
-```
-  Host (InitializeRequest)
-         │
-         ▼
-  Handler::initialize() ──► Returns Plan (id: null)
-         │
-         ▼
-  Repository::savePlan(orderId, plan) ──► Persists Plan with Host ID
-         │
-         ▼
-  Handler::start(StartRequest) ──► Returns StartResult (id: null)
-         │
-         ▼
-  Repository::saveStartResult(planId, startResult) ──► Persists StartResult with Host ID
-```
-
-### 1. Initialize Order
 ```php
-use Elqora\Dgp\Configuration\Dgp;
 use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\RuntimeContext;
-use Elqora\Dgp\Runtime\References\HandlerReference;
 
-// Resolve the repository scoped to this handler:
-$repository = Dgp::runtimeRepository(HandlerReference::fromKey('smm-test'));
-
-$request = new InitializeRequest(
-    orderId: 12345, // Host-managed order ID
-    snapshot: $orderSnapshot,
+$initialize = new InitializeRequest(
+    orderId: 12345,
+    snapshot: $snapshot,
     runtimeContext: new RuntimeContext(
         context: ['requestedBy' => 'customer_admin'],
-        meta: ['traceId' => 'tr-9988']
-    )
+        meta: ['traceId' => 'tr-9988'],
+    ),
 );
 
-$result = $handler->initialize($request);
-if ($result->isSuccess()) {
-    $plan = $result->value(); // Plan DTO
-    
-    // Save Plan through Scoped Host Repository
-    $persistedPlan = $repository->savePlan(12345, $plan)->value();
-}
+$plan = $handler->initialize($initialize)->value();
 ```
 
-### 2. Start Fulfillment
+Starting fulfillment carries the host order identity plus a reference to the persisted plan.
+
 ```php
-use Elqora\Dgp\Runtime\StartRequest;
+use Elqora\Dgp\Runtime\References\PlanReference;
 use Elqora\Dgp\Runtime\RuntimeContext;
+use Elqora\Dgp\Runtime\StartRequest;
 
-// Start Request references the persisted Plan ID
-$startRequest = new StartRequest(
-    planId: $persistedPlan->id,
-    runtimeContext: new RuntimeContext(context: ['ip' => '127.0.0.1'])
+$start = new StartRequest(
+    orderId: 12345,
+    plan: new PlanReference(id: $persistedPlan->id),
+    context: new RuntimeContext(context: ['ip' => '127.0.0.1']),
 );
 
-$result = $handler->start($startRequest);
-if ($result->isSuccess()) {
-    $startResult = $result->value(); // StartResult DTO
-    
-    // Save StartResult through the repository under the parent plan ID
-    $persistedStart = $repository->saveStartResult($persistedPlan->id, $startResult)->value();
-}
+$startResult = $handler->start($start)->value();
 ```
 
----
+## Persistence Through Host Ports
 
-## 🚥 Next Actions
+Hosts can register handler-scoped ports through `Dgp`.
 
-Handlers guide the host platform or user next steps through strongly-typed next actions.
+```php
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Runtime\References\HandlerReference;
+
+Dgp::registerRuntimeRepository($runtimeRepository);
+
+$runtime = Dgp::runtimeRepository(HandlerReference::fromKey('smm-test'));
+$persistedPlan = $runtime->savePlan(12345, $plan)->value();
+$persistedStart = $runtime->saveStartResult($persistedPlan->id, $startResult)->value();
+```
+
+The SDK defines these interfaces only. Host implementations decide how data is stored, indexed, locked, versioned, authorized, and rendered.
+
+## Host Endpoints
+
+`Dgp::endpointPrefix()` sets the host base prefix. `Dgp::endpoint()` resolves typed built-in endpoint paths, while `Dgp::path()` remains available for custom extension paths.
+
+```php
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Endpoints\HostEndpointType;
+
+Dgp::endpointPrefix('/dgp');
+
+$deliveryAction = Dgp::endpoint('smm-test', HostEndpointType::DELIVERY_ACTION);
+$genericAction = Dgp::endpoint('smm-test', HostEndpointType::GENERIC_ACTION);
+$privateAsset = Dgp::endpoint('smm-test', HostEndpointType::PRIVATE_ASSET, 'invoice.pdf');
+
+echo $deliveryAction->path; // /dgp/smm-test/delivery/action
+echo $genericAction->path;  // /dgp/smm-test/generic/action
+echo $privateAsset->path;   // /dgp/smm-test/assets/invoice.pdf
+
+$custom = Dgp::path('smm-test', 'custom/action');
+```
+
+## Next Actions
+
+Handlers guide user or host next steps through `NextAction` DTOs.
 
 ```php
 use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Runtime\Plan;
 
-// Define a next action redirecting the customer to complete payment
-$nextAction = new RedirectAction(
-    url: 'https://gateway.example/pay/invoice-88',
-    external: true,
-    label: 'Complete Invoice Payment'
-);
-
-// Attach it to a Plan or StartResult DTO
 $plan = new Plan(
     id: null,
     key: 'plan-payment',
     state: ['pending_payment' => true],
-    deliveries: [],
-    nextAction: $nextAction
+    nextAction: new RedirectAction(
+        url: 'https://gateway.example/pay/invoice-88',
+        external: true,
+        label: 'Complete Invoice Payment',
+    ),
 );
 ```
 
-Available next action types include:
-- `RedirectAction` (`redirect`): External URL or page redirects.
-- `ButtonAction` (`button`): UI button triggers.
-- `FieldsAction` (`fields`): Dynamic form input submission requests.
-- `PopupAction` (`popup`): Modal overlays with custom UI entry points.
-- `PopoverAction` (`popover`): Embedded target popover view triggers.
-- `InlineAction` (`inline`): Embedded in-page block components.
-- `InstructionsAction` (`instructions`): Static or dynamic user-facing guide/text blocks.
-- `QrCodeAction` (`qr_code`): QR code payment or scanner prompts.
-- `TextAction` (`text`): Custom descriptive or notification text block.
-- `CustomAction` (`custom`): Generic action fallback for developer-defined extensions.
+Built-in next actions include:
 
----
+- `RedirectAction`
+- `ButtonAction`
+- `FieldsAction`
+- `PopupAction`
+- `PopoverAction`
+- `InlineAction`
+- `InstructionsAction`
+- `QrCodeAction`
+- `TextAction`
+- `CustomAction`
 
-## 🧪 Compliance Checking & Testing
-
-Verify that custom drivers conform to the specifications by running the automated testing suite:
-
-```bash
-# Run unit & compliance tests
-vendor/bin/phpunit
-
-# Run a specific compliance file
-vendor/bin/phpunit tests/Compliance/RepositoryComplianceTest.php
-
-# Perform static analysis
-vendor/bin/phpstan analyse
-```
-
-The current `phpunit.xml` defines a single `DGP SDK Test Suite`; `vendor/bin/phpunit --testsuite Compliance` is not a valid suite name.
-
----
-
-## Service Insights
-
-Handlers can declare service insights in their manifest and push current insight snapshots through the handler-scoped services repository. The SDK models the protocol only; hosts remain responsible for persistence, filtering, configuration, authorization, and deciding which declared insights should be retained or displayed.
-
-### Manifest declaration
+`ButtonAction` represents a validated group of buttons.
 
 ```php
-use Elqora\Dgp\Manifest\AnalysisDefinition;
-use Elqora\Dgp\Manifest\Capability;
-use Elqora\Dgp\Manifest\HandlerManifest;
-use Elqora\Dgp\Manifest\ScoreboardItemDefinition;
+use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\ActionButtonKind;
+use Elqora\Dgp\Actions\ActionButtonStyle;
+use Elqora\Dgp\Actions\ButtonAction;
 
-$manifest = new HandlerManifest(
-    key: 'smm-test',
-    name: 'SMM Test',
-    version: '1.0.0',
-    capabilities: [Capability::SERVICE_INSIGHTS],
-    analyses: [
-        new AnalysisDefinition(
-            key: 'delivery.throughput',
-            title: 'Delivery throughput',
-            description: 'Orders delivered over time.'
+$action = new ButtonAction(
+    buttons: [
+        new ActionButton(
+            value: 'cancel',
+            kind: ActionButtonKind::TEXT,
+            label: 'Cancel',
+            style: ActionButtonStyle::DANGER,
+        ),
+        new ActionButton(
+            value: 'refresh',
+            kind: ActionButtonKind::ICON,
+            icon: 'refresh-cw',
+            tooltip: 'Refresh',
         ),
     ],
-    scoreboardItems: [
-        new ScoreboardItemDefinition(
-            key: 'delivery.success-rate',
-            title: 'Success rate'
-        ),
-    ],
-    providesLeaderboard: true,
+    label: 'Available actions',
 );
 ```
 
-Analysis and scoreboard keys are stable identifiers and are serialized in the manifest so runtime updates can be matched reliably by key.
+## Generic And Bulk Actions
 
-### Runtime updates
+Generic actions represent arbitrary host-defined or handler-defined action values over arbitrary targets. They can be used for delivery actions, charge actions, plan actions, order actions, management actions, custom host actions, and bulk-like custom actions.
 
-Analyses use `elqora/chart` directly. DGP does not define a separate chart model.
+```php
+use Elqora\Dgp\Actions\ActionTarget;
+use Elqora\Dgp\Actions\ActionTargetType;
+use Elqora\Dgp\Actions\GenericActionRequest;
+
+$generic = new GenericActionRequest(
+    handlerKey: 'smm-test',
+    actionValue: 'retry_selected',
+    targets: [
+        new ActionTarget(ActionTargetType::ORDER, 12345),
+        new ActionTarget(ActionTargetType::CHARGE, 789, key: 'deposit'),
+        new ActionTarget('provider.custom_target', 'target-1'),
+    ],
+);
+
+$handler->handleGenericAction($generic);
+```
+
+Explicit bulk methods model standard bulk operations separately.
+
+```php
+use Elqora\Dgp\Actions\ActionTarget;
+use Elqora\Dgp\Actions\ActionTargetType;
+use Elqora\Dgp\Bulk\CancelBulkRequest;
+use Elqora\Dgp\Bulk\RefreshBulkRequest;
+use Elqora\Dgp\Bulk\RetryBulkRequest;
+use Elqora\Dgp\Bulk\StartBulkRequest;
+
+$targets = [
+    new ActionTarget(ActionTargetType::ORDER, 12345),
+    new ActionTarget(ActionTargetType::PLAN, 456),
+];
+
+$handler->startBulk(new StartBulkRequest('smm-test', $targets));
+$handler->cancelBulk(new CancelBulkRequest('smm-test', $targets));
+$handler->retryBulk(new RetryBulkRequest('smm-test', $targets));
+$handler->refreshBulk(new RefreshBulkRequest('smm-test', $targets));
+```
+
+## Deliveries
+
+Deliveries expose rendering fields directly instead of hiding them in `meta`: `kind`, `name`, `isPublic`, and `note`. Progress is represented by `DeliveryProgress`; scalar progress values are accepted for convenience and hydrated into a progress DTO.
+
+```php
+use Elqora\Dgp\Deliveries\DeliveryProgress;
+use Elqora\Dgp\Deliveries\DeliveryStatus;
+use Elqora\Dgp\Deliveries\InitializationDelivery;
+
+$delivery = new InitializationDelivery(
+    id: null,
+    key: 'admin-review',
+    status: DeliveryStatus::PROCESSING,
+    label: 'Review',
+    progress: new DeliveryProgress(current: 25, target: 100, percent: 25, unit: 'items'),
+    kind: 'admin_review',
+    name: 'Admin Review',
+    isPublic: false,
+    note: 'Internal preparation',
+);
+```
+
+## Events
+
+Events support built-in `EventType` values and custom string values for extensions.
+
+```php
+use Elqora\Dgp\Events\DgpEvent;
+use Elqora\Dgp\Events\EventType;
+
+$event = new DgpEvent(
+    id: 'event-1',
+    type: EventType::INITIALIZED,
+    handlerKey: 'smm-test',
+    orderId: 12345,
+);
+
+$custom = new DgpEvent(
+    id: 'event-2',
+    type: 'provider.custom_event',
+    handlerKey: 'smm-test',
+    orderId: 12345,
+);
+```
+
+## Charges And Payments
+
+`Charge` carries the money item, summary payment totals, and optional payment history.
+
+```php
+use Elqora\Dgp\Charges\Charge;
+use Elqora\Dgp\Charges\ChargePayment;
+use Elqora\Dgp\Charges\ChargePaymentStatus;
+use Elqora\Dgp\Charges\ChargeStatus;
+use Elqora\Dgp\Money\Amount;
+use Elqora\Dgp\Money\Currency;
+use Elqora\Dgp\Money\Money;
+
+$payment = new ChargePayment(
+    key: 'payment-1',
+    amount: new Money(new Amount('25.00'), new Currency('USD')),
+    status: ChargePaymentStatus::PAID,
+    paidAt: '2026-07-09T10:00:00Z',
+    method: 'wallet',
+    reference: 'txn-123',
+);
+
+$charge = new Charge(
+    id: null,
+    key: 'deposit',
+    deliveryKey: 'init-review',
+    label: 'Deposit',
+    amount: new Money(new Amount('100.00'), new Currency('USD')),
+    status: ChargeStatus::PARTIALLY_PAID,
+    paidAmount: new Money(new Amount('25.00'), new Currency('USD')),
+    balanceDue: new Money(new Amount('75.00'), new Currency('USD')),
+    payments: [$payment],
+);
+```
+
+## Service Props
+
+Service schemas are optional. When a handler provides `ServiceProps`, only `filters` and `fields` are required. Other fields such as button effects, fallbacks, notices, names, and schema versions are optional.
+
+```php
+use Elqora\Dgp\Catalog\Schemas\ServiceProps;
+
+$props = new ServiceProps(
+    filters: [['id' => 'tag:manual', 'label' => 'Manual Task']],
+    fields: [['id' => 'field:desc', 'type' => 'text', 'label' => 'Instructions']],
+);
+```
+
+## Insights
+
+Insights, charts, UI manifest support, and private assets are product additions isolated from the mandatory `DgpDriverContract` except where a handler explicitly declares or implements the related capability.
+
+The current package depends on `elqora/chart` because `Analysis` stores an `Elqora\Chart\Charts\Chart` directly. If a smaller core package becomes important, insights/chart support is the main candidate for extraction into an optional package or adapter layer.
 
 ```php
 use Elqora\Chart\Charts\Charts;
 use Elqora\Chart\Enums\ValueType;
 use Elqora\Chart\Series\Series;
-use Elqora\Dgp\Configuration\Dgp;
 use Elqora\Dgp\Insights\Analysis;
-use Elqora\Dgp\Insights\Leaderboard;
-use Elqora\Dgp\Insights\LeaderboardEntry;
-use Elqora\Dgp\Insights\Scoreboard;
-use Elqora\Dgp\Insights\ScoreboardItem;
-use Elqora\Dgp\Runtime\References\HandlerReference;
-
-$insights = Dgp::insightsRepository(HandlerReference::fromKey('smm-test'));
 
 $chart = Charts::line(
     key: 'delivery.throughput',
@@ -358,64 +429,19 @@ $chart = Charts::line(
     ],
 );
 
-$insights->updateAnalyses([
-    new Analysis('delivery.throughput', $chart),
-]);
-
-$insights->updateScoreboard(new Scoreboard([
-    new ScoreboardItem(
-        key: 'delivery.success-rate',
-        value: 98.5,
-        title: 'Success rate',
-        unit: '%',
-    ),
-]));
-
-$insights->updateLeaderboard(new Leaderboard([
-    new LeaderboardEntry(
-        serviceId: 101,
-        rank: 1,
-        score: 99.2,
-        title: 'Premium delivery',
-    ),
-]));
+$analysis = new Analysis('delivery.throughput', $chart);
 ```
 
-### Service state updates
+## Testing
 
-The handler-scoped services repository reads catalog services and receives individual service state changes. Each state change requires a non-empty reason.
-
-```php
-use Elqora\Dgp\Configuration\Dgp;
-use Elqora\Dgp\Runtime\References\HandlerReference;
-
-$services = Dgp::servicesRepository(HandlerReference::fromKey('smm-test'));
-
-$service = $services->findService(101)->value();
-
-$services->enable(101, 'Provider confirmed availability.');
-$services->disable(102, 'Upstream maintenance.');
-$services->lock(103, 'Investigating inconsistent delivery.');
-$services->unlock(103, 'Delivery metrics recovered.');
+```bash
+composer test
+composer analyse
+composer check
 ```
 
-### Delivery access
+To run a specific file:
 
-Handlers can resolve a separate deliveries repository when they need to inspect persisted progress data for analytics or insight calculation.
-
-```php
-use Elqora\Dgp\Configuration\Dgp;
-use Elqora\Dgp\Deliveries\DeliveryStatus;
-use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
-use Elqora\Dgp\Runtime\References\DeliveryReference;
-use Elqora\Dgp\Runtime\References\HandlerReference;
-
-$deliveries = Dgp::deliveriesRepository(HandlerReference::fromKey('smm-test'));
-
-$delivery = $deliveries->findDelivery(new DeliveryReference(key: 'init-del'))->value();
-
-$active = $deliveries->deliveries(new DeliveryQuery(
-    status: DeliveryStatus::PROCESSING,
-    active: true,
-))->value();
+```bash
+vendor/bin/phpunit tests/Compliance/RepositoryComplianceTest.php
 ```

@@ -7,13 +7,15 @@ use JsonSerializable;
 
 final readonly class DgpEvent implements Arrayable, JsonSerializable
 {
+    public EventType|string $type;
+
     /**
      * @param array<string, mixed> $payload
      * @param array<string, mixed> $meta
      */
     public function __construct(
         public string $id,
-        public string $type,
+        EventType|string $type,
         public string $handlerKey,
         public string|int $orderId,
         public ?string $deliveryKey = null,
@@ -21,7 +23,9 @@ final readonly class DgpEvent implements Arrayable, JsonSerializable
         public ?string $occurredAt = null,
         public array $payload = [],
         public array $meta = [],
-    ) {}
+    ) {
+        $this->type = $type;
+    }
 
     /**
      * @return array<string, mixed>
@@ -30,7 +34,7 @@ final readonly class DgpEvent implements Arrayable, JsonSerializable
     {
         return [
             'id' => $this->id,
-            'type' => $this->type,
+            'type' => $this->type instanceof EventType ? $this->type->value : $this->type,
             'handler_key' => $this->handlerKey,
             'order_id' => $this->orderId,
             'delivery_key' => $this->deliveryKey,

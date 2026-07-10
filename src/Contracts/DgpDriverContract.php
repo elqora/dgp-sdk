@@ -10,6 +10,8 @@ use Elqora\Dgp\Catalog\Services\Contracts\ServicesContract;
 use Elqora\Dgp\Runtime\Contracts\RuntimeContract;
 use Elqora\Dgp\Deliveries\Contracts\OrderDeliveriesContract;
 use Elqora\Dgp\Management\Contracts\OrderManagementContract;
+use Elqora\Dgp\Actions\Contracts\GenericActionContract;
+use Elqora\Dgp\Bulk\Contracts\BulkActionContract;
 
 interface DgpDriverContract extends
     ManifestContract,
@@ -19,6 +21,8 @@ interface DgpDriverContract extends
     ServicesContract,
     RuntimeContract,
     OrderDeliveriesContract,
-    OrderManagementContract
+    OrderManagementContract,
+    GenericActionContract,
+    BulkActionContract
 {
 }

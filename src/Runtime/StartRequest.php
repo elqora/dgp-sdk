@@ -3,13 +3,19 @@
 namespace Elqora\Dgp\Runtime;
 
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Dgp\Runtime\References\PlanReference;
 use JsonSerializable;
 
 final readonly class StartRequest implements Arrayable, JsonSerializable
 {
+    /**
+     * @param array<string, mixed> $meta
+     */
     public function __construct(
-        public string|int $planId,
-        public ?RuntimeContext $runtimeContext = null,
+        public string|int $orderId,
+        public PlanReference $plan,
+        public ?RuntimeContext $context = null,
+        public array $meta = [],
     ) {}
 
     /**
@@ -18,8 +24,13 @@ final readonly class StartRequest implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return [
-            'planId' => $this->planId,
-            'runtimeContext' => $this->runtimeContext?->toArray(),
+            'order_id' => $this->orderId,
+            'plan' => [
+                'id' => $this->plan->id,
+                'key' => $this->plan->key,
+            ],
+            'context' => $this->context?->toArray(),
+            'meta' => $this->meta,
         ];
     }
 

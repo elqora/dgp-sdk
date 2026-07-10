@@ -15,11 +15,15 @@ final readonly class InitializationDelivery extends Delivery
         string $key,
         DeliveryStatus $status,
         string $label,
-        string|int|float|null $progress = null,
+        mixed $progress = null,
         string|int|null $planId = null,
         ?string $startId = null,
         ?NextAction $nextAction = null,
         array $meta = [],
+        string $kind = 'default',
+        ?string $name = null,
+        bool $isPublic = true,
+        ?string $note = null,
     ) {
         if ($startId !== null) {
             throw new InvalidArgumentException('InitializationDelivery cannot have a startId.');
@@ -35,7 +39,11 @@ final readonly class InitializationDelivery extends Delivery
             planId: $planId,
             startId: null,
             nextAction: $nextAction,
-            meta: $meta
+            meta: $meta,
+            kind: $kind,
+            name: $name,
+            isPublic: $isPublic,
+            note: $note,
         );
     }
 }

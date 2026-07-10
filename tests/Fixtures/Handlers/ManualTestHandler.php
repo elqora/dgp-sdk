@@ -32,6 +32,11 @@ use Elqora\Dgp\Runtime\StartResult;
 use Elqora\Dgp\Deliveries\ResolveOrderDeliveriesRequest;
 use Elqora\Dgp\Management\ResolveOrderManagementRequest;
 use Elqora\Dgp\Management\OrderManagement;
+use Elqora\Dgp\Actions\GenericActionRequest;
+use Elqora\Dgp\Bulk\CancelBulkRequest;
+use Elqora\Dgp\Bulk\RefreshBulkRequest;
+use Elqora\Dgp\Bulk\RetryBulkRequest;
+use Elqora\Dgp\Bulk\StartBulkRequest;
 
 class ManualTestHandler implements DgpDriverContract, ServiceSchemaCatalogContract
 {
@@ -167,6 +172,46 @@ class ManualTestHandler implements DgpDriverContract, ServiceSchemaCatalogContra
      * @return Result<null>
      */
     public function cancel(CancelRequest $request): Result
+    {
+        return Result::success(null);
+    }
+
+    /**
+     * @return Result<null>
+     */
+    public function handleGenericAction(GenericActionRequest $request): Result
+    {
+        return Result::success(null);
+    }
+
+    /**
+     * @return Result<null>
+     */
+    public function startBulk(StartBulkRequest $request): Result
+    {
+        return Result::success(null);
+    }
+
+    /**
+     * @return Result<null>
+     */
+    public function cancelBulk(CancelBulkRequest $request): Result
+    {
+        return Result::success(null);
+    }
+
+    /**
+     * @return Result<null>
+     */
+    public function retryBulk(RetryBulkRequest $request): Result
+    {
+        return Result::success(null);
+    }
+
+    /**
+     * @return Result<null>
+     */
+    public function refreshBulk(RefreshBulkRequest $request): Result
     {
         return Result::success(null);
     }
