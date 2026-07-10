@@ -97,10 +97,14 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         $this->store['idempotency'][$cacheKey] = $result;
     }
 
-    public function savePlan(string|int $orderId, Plan $plan, ?RuntimeWriteOptions $options = null): Result
+    /**
+     * @return Result<Plan>
+     * @phpstan-ignore-next-line invoked through MockRuntimeRepository host-side seeding
+     */
+    private function persistPlan(string|int $orderId, Plan $plan, ?RuntimeWriteOptions $options = null): Result
     {
         if ($options !== null) {
-            $idempotent = $this->checkIdempotency($orderId, 'savePlan', $options);
+            $idempotent = $this->checkIdempotency($orderId, 'persistPlan', $options);
             if ($idempotent !== null) {
                 /** @var Result<Plan> $res */
                 $res = $idempotent;
@@ -211,7 +215,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         }
 
         $result = Result::success($persistedPlan);
-        $this->saveIdempotency($orderId, 'savePlan', $options, $result);
+        $this->saveIdempotency($orderId, 'persistPlan', $options, $result);
         return $result;
     }
 
@@ -251,7 +255,11 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         return Result::success($results);
     }
 
-    public function saveStartResult(string|int $planId, StartResult $startResult, ?RuntimeWriteOptions $options = null): Result
+    /**
+     * @return Result<StartResult>
+     * @phpstan-ignore-next-line invoked through MockRuntimeRepository host-side seeding
+     */
+    private function persistStartResult(string|int $planId, StartResult $startResult, ?RuntimeWriteOptions $options = null): Result
     {
         // Resolve parent Plan by planId
         $parentPlan = null;
@@ -274,7 +282,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         }
 
         if ($options !== null) {
-            $idempotent = $this->checkIdempotency($orderId, 'saveStartResult', $options);
+            $idempotent = $this->checkIdempotency($orderId, 'persistStartResult', $options);
             if ($idempotent !== null) {
                 /** @var Result<StartResult> $res */
                 $res = $idempotent;
@@ -404,7 +412,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         }
 
         $result = Result::success($persistedStart);
-        $this->saveIdempotency($orderId, 'saveStartResult', $options, $result);
+        $this->saveIdempotency($orderId, 'persistStartResult', $options, $result);
         return $result;
     }
 
@@ -490,7 +498,12 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         return Result::success($results);
     }
 
-    public function saveDeliveries(string|int $orderId, array $deliveries, ?RuntimeWriteOptions $options = null): Result
+    /**
+     * @param list<Delivery> $deliveries
+     * @return Result<list<Delivery>>
+     * @phpstan-ignore-next-line invoked through MockRuntimeRepository host-side seeding
+     */
+    private function persistDeliveries(string|int $orderId, array $deliveries, ?RuntimeWriteOptions $options = null): Result
     {
         if ($options !== null && $options->expectedRevision !== null) {
             /** @var Result<array<int, Delivery>> $fail */
@@ -502,7 +515,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         }
 
         if ($options !== null) {
-            $idempotent = $this->checkIdempotency($orderId, 'saveDeliveries', $options);
+            $idempotent = $this->checkIdempotency($orderId, 'persistDeliveries', $options);
             if ($idempotent !== null) {
                 /** @var Result<array<int, Delivery>> $res */
                 $res = $idempotent;
@@ -606,7 +619,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         }
 
         $result = Result::success($persisted);
-        $this->saveIdempotency($orderId, 'saveDeliveries', $options, $result);
+        $this->saveIdempotency($orderId, 'persistDeliveries', $options, $result);
         return $result;
     }
 

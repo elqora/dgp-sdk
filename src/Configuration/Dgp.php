@@ -11,6 +11,8 @@ use Elqora\Dgp\Errors\DgpError;
 use Elqora\Dgp\Errors\DgpConfigurationException;
 use Elqora\Dgp\Insights\Contracts\InsightsRepositoryContract;
 use Elqora\Dgp\Insights\Contracts\HandlerInsightsRepositoryContract;
+use Elqora\Dgp\Progress\Contracts\DeliveryProgressRepositoryContract;
+use Elqora\Dgp\Progress\Contracts\HandlerDeliveryProgressRepositoryContract;
 use Elqora\Dgp\Runtime\Contracts\RuntimeRepositoryContract;
 use Elqora\Dgp\Runtime\Contracts\HandlerRuntimeRepositoryContract;
 use Elqora\Dgp\Runtime\References\HandlerReference;
@@ -24,6 +26,7 @@ final class Dgp
     private static ?ServicesRepositoryContract $servicesRepository = null;
     private static ?DeliveriesRepositoryContract $deliveriesRepository = null;
     private static ?InsightsRepositoryContract $insightsRepository = null;
+    private static ?DeliveryProgressRepositoryContract $deliveryProgressRepository = null;
 
     public static function endpointPrefix(string $prefix): void
     {
@@ -95,6 +98,12 @@ final class Dgp
         InsightsRepositoryContract $repository
     ): void {
         self::$insightsRepository = $repository;
+    }
+
+    public static function registerDeliveryProgressRepository(
+        DeliveryProgressRepositoryContract $repository
+    ): void {
+        self::$deliveryProgressRepository = $repository;
     }
 
     /**
@@ -247,6 +256,47 @@ final class Dgp
             throw new DgpConfigurationException(
                 errorCode: $error?->code ?? 'insights_repository_resolution_failed',
                 message: $error?->message ?? 'The handler insights repository could not be resolved.',
+            );
+        }
+
+        return $result->value();
+    }
+
+    /**
+     * @return Result<HandlerDeliveryProgressRepositoryContract>
+     */
+    public static function resolveDeliveryProgressRepository(
+        HandlerReference $handler
+    ): Result {
+        if (self::$deliveryProgressRepository === null) {
+            /** @var Result<HandlerDeliveryProgressRepositoryContract> $fail */
+            $fail = Result::failure(new DgpError(
+                code: 'delivery_progress_repository_not_registered',
+                message: 'No DGP delivery progress repository has been registered.'
+            ));
+            return $fail;
+        }
+
+        return self::$deliveryProgressRepository->forHandler($handler);
+    }
+
+    public static function deliveryProgressRepository(
+        HandlerReference $handler
+    ): HandlerDeliveryProgressRepositoryContract {
+        if (self::$deliveryProgressRepository === null) {
+            throw new DgpConfigurationException(
+                errorCode: 'delivery_progress_repository_not_registered',
+                message: 'No DGP delivery progress repository has been registered.'
+            );
+        }
+
+        $result = self::$deliveryProgressRepository->forHandler($handler);
+
+        if ($result->isFailure()) {
+            $error = $result->error();
+            throw new DgpConfigurationException(
+                errorCode: $error?->code ?? 'delivery_progress_repository_resolution_failed',
+                message: $error?->message ?? 'The handler delivery progress repository could not be resolved.',
             );
         }
 

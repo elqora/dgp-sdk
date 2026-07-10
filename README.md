@@ -70,12 +70,13 @@ The SDK may define repositories and stores as host-provided ports. The SDK defin
 Examples:
 
 - `RuntimeRepositoryContract` resolves a handler-scoped runtime port.
-- `HandlerRuntimeRepositoryContract` can save and read plans, start results, and deliveries.
+- `HandlerRuntimeRepositoryContract` reads plans, start results, deliveries, and runtime views.
 - `ServicesRepositoryContract` resolves handler-scoped service catalog/state access.
 - `DeliveriesRepositoryContract` exposes persisted delivery lookups.
+- `DeliveryProgressRepositoryContract` records and reads historical delivery progress observations.
 - `InsightsRepositoryContract` exposes insight snapshot updates.
 
-These ports may include write operations, but the SDK still owns no storage backend. A host can implement them with SQL, files, queues, remote APIs, memory, or any other storage model.
+Handlers return normalized runtime state. The host persists plans, start results, and deliveries automatically, then exposes persisted state through host-provided ports. The SDK still owns no storage backend. A host can implement ports with SQL, files, queues, remote APIs, memory, or any other storage model.
 
 ## Configuration
 
@@ -170,22 +171,23 @@ $start = new StartRequest(
 $startResult = $handler->start($start)->value();
 ```
 
-## Persistence Through Host Ports
+## Runtime State Through Host Ports
 
-Hosts can register handler-scoped ports through `Dgp`.
+Hosts can register handler-scoped ports through `Dgp`. The runtime repository is read-only from the handler-facing side.
 
 ```php
 use Elqora\Dgp\Configuration\Dgp;
 use Elqora\Dgp\Runtime\References\HandlerReference;
+use Elqora\Dgp\Runtime\References\PlanReference;
 
 Dgp::registerRuntimeRepository($runtimeRepository);
 
 $runtime = Dgp::runtimeRepository(HandlerReference::fromKey('smm-test'));
-$persistedPlan = $runtime->savePlan(12345, $plan)->value();
-$persistedStart = $runtime->saveStartResult($persistedPlan->id, $startResult)->value();
+$plan = $runtime->findPlan(12345, new PlanReference(key: 'plan-payment'))->value();
+$view = $runtime->runtime(12345)->value();
 ```
 
-The SDK defines these interfaces only. Host implementations decide how data is stored, indexed, locked, versioned, authorized, and rendered.
+The SDK defines these interfaces only. Host implementations decide how returned state is stored, indexed, locked, versioned, authorized, and rendered.
 
 ## Host Endpoints
 
@@ -331,6 +333,31 @@ $delivery = new InitializationDelivery(
     isPublic: false,
     note: 'Internal preparation',
 );
+```
+
+`Delivery.progress` is the current progress state. `DeliveryProgressRepository` stores and exposes historical progress observations. Progress records may be written asynchronously through `record()` by handlers, workers, synchronizers, webhooks, actions, host processes, or manual operations. The host implements the repository and owns storage.
+
+```php
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Deliveries\DeliveryProgress;
+use Elqora\Dgp\Deliveries\DeliveryStage;
+use Elqora\Dgp\Progress\DeliveryProgressRecord;
+use Elqora\Dgp\Progress\ProgressSource;
+use Elqora\Dgp\Runtime\References\DeliveryReference;
+use Elqora\Dgp\Runtime\References\HandlerReference;
+
+Dgp::registerDeliveryProgressRepository($progressRepository);
+
+$progress = Dgp::deliveryProgressRepository(HandlerReference::fromKey('smm-test'));
+$progress->record(new DeliveryProgressRecord(
+    id: null,
+    orderId: 12345,
+    delivery: new DeliveryReference(key: 'admin-review'),
+    stage: DeliveryStage::INITIALIZATION,
+    progress: new DeliveryProgress(current: 50, target: 100, percent: 50, unit: 'items'),
+    recordedAt: '2026-07-10T10:15:00Z',
+    source: ProgressSource::SYNCHRONIZATION,
+));
 ```
 
 ## Events

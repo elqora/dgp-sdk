@@ -22,20 +22,24 @@ use Elqora\Dgp\Runtime\References\PlanReference;
 use Elqora\Dgp\Runtime\References\StartResultReference;
 use Elqora\Dgp\Runtime\Plan;
 use Elqora\Dgp\Runtime\StartResult;
-use Elqora\Dgp\Runtime\RuntimeWriteOptions;
 use Elqora\Dgp\Runtime\Queries\PlanQuery;
 use Elqora\Dgp\Runtime\Queries\StartResultQuery;
 use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
-use Elqora\Dgp\Deliveries\FulfillmentDelivery;
+use Elqora\Dgp\Deliveries\DeliveryProgress;
+use Elqora\Dgp\Deliveries\DeliveryStage;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
 use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\RedirectAction;
+use Elqora\Dgp\Progress\DeliveryProgressRecord;
+use Elqora\Dgp\Progress\ProgressSource;
+use Elqora\Dgp\Progress\ProgressTimelineQuery;
+use Elqora\Dgp\Support\Hydrator;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockRuntimeRepository;
-use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerRuntimeRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockServicesRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerServicesRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockDeliveriesRepository;
+use Elqora\Dgp\Tests\Fixtures\Repository\MockDeliveryProgressRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockInsightsRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerInsightsRepository;
 
@@ -65,7 +69,7 @@ class RepositoryComplianceTest extends TestCase
         parent::setUp();
         // Reset registered repositories
         $ref = new \ReflectionClass(Dgp::class);
-        foreach (['runtimeRepository', 'servicesRepository', 'deliveriesRepository', 'insightsRepository'] as $property) {
+        foreach (['runtimeRepository', 'servicesRepository', 'deliveriesRepository', 'insightsRepository', 'deliveryProgressRepository'] as $property) {
             $prop = $ref->getProperty($property);
             $prop->setAccessible(true);
             $prop->setValue(null, null);
@@ -91,53 +95,49 @@ class RepositoryComplianceTest extends TestCase
         Dgp::runtimeRepository(HandlerReference::fromId('unknown-handler'));
     }
 
-    public function testImmutableResolutionScopingAndIsolation(): void
+    public function testRuntimeRepositoryIsReadOnlyAndHandlerScoped(): void
     {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
+        $runtimeRepository = new MockRuntimeRepository();
+        $handler = HandlerReference::fromKey('jap');
+        $otherHandler = HandlerReference::fromKey('smm');
+        Dgp::registerRuntimeRepository($runtimeRepository);
 
-        $japRepo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
-        $smmRepo = Dgp::runtimeRepository(HandlerReference::fromKey('smm'));
+        $japRepo = Dgp::runtimeRepository($handler);
+        $smmRepo = Dgp::runtimeRepository($otherHandler);
 
-        // Save plan in jap handler
         $plan = new Plan(null, 'main-plan', ['step' => 1]);
-        $saveRes = $japRepo->savePlan(123, $plan);
+        $saveRes = $runtimeRepository->seedPlan($handler, 123, $plan);
         $this->assertTrue($saveRes->isSuccess());
         $savedJapPlan = $saveRes->value();
+        $this->assertNotNull($savedJapPlan);
 
-        // 1. Isolation: smmRepo cannot find the jap plan (returns success with null, avoiding leakage)
         $findRes = $smmRepo->findPlan(123, new PlanReference(id: $savedJapPlan->id));
         $this->assertTrue($findRes->isSuccess());
         $this->assertNull($findRes->value());
 
-        // 2. Mismatched order: japRepo cannot find the plan under another order
         $findResOtherOrder = $japRepo->findPlan(999, new PlanReference(id: $savedJapPlan->id));
         $this->assertTrue($findResOtherOrder->isSuccess());
         $this->assertNull($findResOtherOrder->value());
 
-        // 3. Mutation isolation: smmRepo cannot append deliveries to jap's plan
-        $del = new InitializationDelivery(null, 'del-1', DeliveryStatus::PENDING, 'Desc', null, $savedJapPlan->id);
-        $mutationRes = $smmRepo->saveDeliveries(123, [$del]);
-        $this->assertTrue($mutationRes->isFailure());
-        $error = $mutationRes->error();
-        $this->assertNotNull($error);
-        $this->assertEquals('parent_not_found', $error->code);
+        $this->assertFalse(method_exists($japRepo, 'savePlan'));
+        $this->assertFalse(method_exists($japRepo, 'saveStartResult'));
+        $this->assertFalse(method_exists($japRepo, 'saveDeliveries'));
     }
 
-    public function testGraphSavesReconstructDTOsWithPersistedIDs(): void
+    public function testRuntimeRepositoryReadsHostPersistedGraph(): void
     {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
-        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+        $runtimeRepository = new MockRuntimeRepository();
+        $handler = HandlerReference::fromKey('jap');
+        Dgp::registerRuntimeRepository($runtimeRepository);
+        $repo = Dgp::runtimeRepository($handler);
 
-        // Save a plan with a nested initialization delivery
         $del = new InitializationDelivery(null, 'init-del-1', DeliveryStatus::PENDING, 'Verify account');
         $plan = new Plan(null, 'auth-flow', ['auth' => 'oauth'], [$del]);
 
-        $res = $repo->savePlan(123, $plan);
+        $res = $runtimeRepository->seedPlan($handler, 123, $plan);
         $this->assertTrue($res->isSuccess());
         $persisted = $res->value();
-
         $this->assertNotNull($persisted);
-        // Verify newly reconstructed DTO graph (input remains unmodified)
         $this->assertNull($plan->id);
         $this->assertNull($plan->deliveries[0]->id);
 
@@ -147,162 +147,33 @@ class RepositoryComplianceTest extends TestCase
         $this->assertNotNull($persisted->deliveries[0]->id);
         $this->assertEquals($persisted->id, $persisted->deliveries[0]->planId);
         $this->assertNull($persisted->deliveries[0]->startId);
-    }
 
-    public function testStartResultInvariantsAndResolution(): void
-    {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
-        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
-
-        // 1. Throws parent_plan_not_found if referenced parent plan does not exist
-        $start = new StartResult(null, 'start-1', ['run' => true]);
-        $res = $repo->saveStartResult(123, $start);
-        $this->assertTrue($res->isFailure());
-        $error = $res->error();
-        $this->assertNotNull($error);
-        $this->assertEquals('parent_plan_not_found', $error->code);
-
-        // 2. Throws parent_plan_not_found if planId is missing from repo lookup
-        $startWithPlan = new StartResult(null, 'start-1', ['run' => true], [], null, [], 'missing-plan-id');
-        $res2 = $repo->saveStartResult(9999, $startWithPlan);
-        $this->assertTrue($res2->isFailure());
-        $error2 = $res2->error();
-        $this->assertNotNull($error2);
-        $this->assertEquals('parent_plan_not_found', $error2->code);
-
-        // Save a valid plan first
-        $plan = new Plan(null, 'auth-flow', ['step' => 'init']);
-        $planSaved = $repo->savePlan(123, $plan)->value();
-        $this->assertNotNull($planSaved);
-        $this->assertNotNull($planSaved->id);
-        /** @var string|int $savedPlanId */
-        $savedPlanId = $planSaved->id;
-
-        // 3. Succeeds if plan is correct and resolves relationship
-        $startValid = new StartResult(null, 'start-1', ['run' => true], [], null, [], $savedPlanId);
-        $res3 = $repo->saveStartResult($savedPlanId, $startValid);
-        $this->assertTrue($res3->isSuccess());
-        $persistedStart = $res3->value();
-        $this->assertNotNull($persistedStart);
-        $this->assertEquals($savedPlanId, $persistedStart->planId);
-        $this->assertEquals($planSaved->key, $persistedStart->planKey);
-
-        // 4. Throws parent_plan_reference_mismatch if planId and planKey resolve inconsistently
-        $startInconsistent = new StartResult(null, 'start-2', ['run' => true], [], null, [], $savedPlanId, 'mismatched-key');
-        $res4 = $repo->saveStartResult($savedPlanId, $startInconsistent);
-        $this->assertTrue($res4->isFailure());
-        $error4 = $res4->error();
-        $this->assertNotNull($error4);
-        $this->assertEquals('parent_plan_reference_mismatch', $error4->code);
-    }
-
-    public function testExpectedRevisionOnPlanAndStartResultSaves(): void
-    {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
-        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
-
-        $plan = new Plan(null, 'main-plan', []);
-        $saved = $repo->savePlan(123, $plan)->value();
-        $this->assertNotNull($saved);
-        $this->assertEquals(1, $saved->revision);
-
-        // Save with mismatched expectedRevision fails
-        $optionsFail = new RuntimeWriteOptions(expectedRevision: 99);
-        $resFail = $repo->savePlan(123, $saved, $optionsFail);
-        $this->assertTrue($resFail->isFailure());
-        $error = $resFail->error();
-        $this->assertNotNull($error);
-        $this->assertEquals('runtime_revision_conflict', $error->code);
-
-        // Save with correct expectedRevision succeeds and increments revision
-        $optionsSuccess = new RuntimeWriteOptions(expectedRevision: 1);
-        $resSuccess = $repo->savePlan(123, $saved, $optionsSuccess);
-        $this->assertTrue($resSuccess->isSuccess());
-        $val = $resSuccess->value();
-        $this->assertNotNull($val);
-        $this->assertEquals(2, $val->revision);
-    }
-
-    public function testSaveDeliveriesRejectsExpectedRevision(): void
-    {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
-        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
-
-        $plan = $repo->savePlan(123, new Plan(null, 'main-plan', []))->value();
-        $this->assertNotNull($plan);
-        $del = new InitializationDelivery(null, 'init-del-1', DeliveryStatus::PENDING, 'Verify', null, $plan->id);
-
-        // expectedRevision provided to saveDeliveries fails and does not mutate
-        $options = new RuntimeWriteOptions(expectedRevision: 1);
-        $res = $repo->saveDeliveries(123, [$del], $options);
-
-        $this->assertTrue($res->isFailure());
-        $error = $res->error();
-        $this->assertNotNull($error);
-        $this->assertEquals('delivery_revision_not_supported', $error->code);
-
-        // Verify delivery was not persisted
-        $listRes = $repo->deliveriesForPlan(123, new PlanReference(id: $plan->id));
-        $this->assertCount(0, $listRes->value());
-    }
-
-    public function testIdempotencyMatchingScopes(): void
-    {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
-        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
-
-        $plan = new Plan(null, 'main-plan', []);
-        $options = new RuntimeWriteOptions(operationKey: 'unique-op-key-1');
-
-        // First save executes successfully
-        $res1 = $repo->savePlan(123, $plan, $options);
-        $this->assertTrue($res1->isSuccess());
-        $saved1 = $res1->value();
-        $this->assertNotNull($saved1);
-
-        // Second duplicate save returns the identical cached result (reconstructed DTO with populated ID/revision)
-        $res2 = $repo->savePlan(123, $plan, $options);
-        $this->assertTrue($res2->isSuccess());
-        $val2 = $res2->value();
-        $this->assertNotNull($val2);
-        $this->assertEquals($saved1->id, $val2->id);
-        $this->assertEquals($saved1->revision, $val2->revision);
-
-        // Duplicate write using updateId
-        $optionsUpdateId = new RuntimeWriteOptions(updateId: 'update-id-123');
-        $res3 = $repo->savePlan(123, $plan, $optionsUpdateId);
-        $this->assertTrue($res3->isSuccess());
-        $saved3 = $res3->value();
-        $this->assertNotNull($saved3);
-
-        $res4 = $repo->savePlan(123, $plan, $optionsUpdateId);
-        $this->assertTrue($res4->isSuccess());
-        $val4 = $res4->value();
-        $this->assertNotNull($val4);
-        $this->assertEquals($saved3->id, $val4->id);
+        $fetched = $repo->deliveriesForPlan(123, new PlanReference(id: $persisted->id))->value();
+        $this->assertCount(1, $fetched);
+        $this->assertEquals('init-del-1', $fetched[0]->key);
     }
 
     public function testOrderRuntimeViewSelections(): void
     {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
-        /** @var MockHandlerRuntimeRepository $repo */
-        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+        $runtimeRepository = new MockRuntimeRepository();
+        $handler = HandlerReference::fromKey('jap');
+        Dgp::registerRuntimeRepository($runtimeRepository);
+        $repo = Dgp::runtimeRepository($handler);
 
-        $plan1 = $repo->savePlan(123, new Plan(null, 'plan-1', []))->value();
+        $plan1 = $runtimeRepository->seedPlan($handler, 123, new Plan(null, 'plan-1', []))->value();
         $this->assertNotNull($plan1);
-        $plan2 = $repo->savePlan(123, new Plan(null, 'plan-2', []))->value();
+        $plan2 = $runtimeRepository->seedPlan($handler, 123, new Plan(null, 'plan-2', []))->value();
         $this->assertNotNull($plan2);
 
         $this->assertNotNull($plan1->id);
         /** @var string|int $p1Id */
         $p1Id = $plan1->id;
 
-        $startResult = $repo->saveStartResult($p1Id, new StartResult(null, 'start-1', [], [], null, [], $p1Id))->value();
+        $startResult = $runtimeRepository->seedStartResult($handler, $p1Id, new StartResult(null, 'start-1', [], [], null, [], $p1Id))->value();
         $this->assertNotNull($startResult);
 
-        // Configure current refs explicitly in mock store
-        $repo->setCurrentPlan(123, $plan2->id);
-        $repo->setCurrentStartResult(123, $startResult->id);
+        $runtimeRepository->setCurrentPlan($handler, 123, $plan2->id);
+        $runtimeRepository->setCurrentStartResult($handler, 123, $startResult->id);
 
         $view = $repo->runtime(123)->value();
         $this->assertNotNull($view);
@@ -318,9 +189,10 @@ class RepositoryComplianceTest extends TestCase
 
     public function testRepositoryPreservesDeliveryNextAction(): void
     {
-        Dgp::registerRuntimeRepository(new MockRuntimeRepository());
-        /** @var MockHandlerRuntimeRepository $repo */
-        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+        $runtimeRepository = new MockRuntimeRepository();
+        $handler = HandlerReference::fromKey('jap');
+        Dgp::registerRuntimeRepository($runtimeRepository);
+        $repo = Dgp::runtimeRepository($handler);
 
         $redirectAction = new RedirectAction(
             url: 'https://gateway.example/download',
@@ -347,7 +219,7 @@ class RepositoryComplianceTest extends TestCase
             ]
         );
 
-        $savedPlan = $repo->savePlan(123, $plan)->value();
+        $savedPlan = $runtimeRepository->seedPlan($handler, 123, $plan)->value();
         $this->assertNotNull($savedPlan);
         $this->assertCount(1, $savedPlan->deliveries);
         $this->assertNotNull($savedPlan->deliveries[0]->nextAction);
@@ -363,7 +235,6 @@ class RepositoryComplianceTest extends TestCase
         $this->assertInstanceOf(RedirectAction::class, $action2);
         $this->assertEquals('https://gateway.example/download', $action2->url);
 
-        // 3. Save deliveries directly via saveDeliveries()
         $deliveryUpdate = new InitializationDelivery(
             id: $fetched[0]->id,
             key: 'init-del',
@@ -375,7 +246,7 @@ class RepositoryComplianceTest extends TestCase
             nextAction: null // Clear nextAction
         );
 
-        $updatedList = $repo->saveDeliveries(123, [$deliveryUpdate])->value();
+        $updatedList = $runtimeRepository->seedDeliveries($handler, 123, [$deliveryUpdate])->value();
         $this->assertCount(1, $updatedList);
         $this->assertNull($updatedList[0]->nextAction);
 
@@ -499,14 +370,16 @@ class RepositoryComplianceTest extends TestCase
     public function testDeliveriesRepositoryReadsPersistedHandlerDeliveries(): void
     {
         $runtimeRepository = new MockRuntimeRepository();
+        $handler = HandlerReference::fromKey('jap');
         Dgp::registerRuntimeRepository($runtimeRepository);
         Dgp::registerDeliveriesRepository(new MockDeliveriesRepository($runtimeRepository->store));
 
-        $runtime = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+        Dgp::runtimeRepository($handler);
         $deliveries = Dgp::deliveriesRepository(HandlerReference::fromKey('jap'));
         $otherDeliveries = Dgp::deliveriesRepository(HandlerReference::fromKey('smm'));
 
-        $plan = $runtime->savePlan(
+        $plan = $runtimeRepository->seedPlan(
+            $handler,
             123,
             new Plan(
                 null,
@@ -540,5 +413,129 @@ class RepositoryComplianceTest extends TestCase
         $this->assertCount(1, $deliveries->deliveries(new DeliveryQuery(active: true))->value());
         $this->assertCount(0, $deliveries->deliveries(new DeliveryQuery(status: DeliveryStatus::COMPLETED))->value());
         $this->assertCount(0, $otherDeliveries->deliveries()->value());
+    }
+
+    public function testProgressRecordAndQuerySerializationRoundTrips(): void
+    {
+        $record = new DeliveryProgressRecord(
+            id: null,
+            orderId: 123,
+            delivery: new DeliveryReference(id: 456, key: 'fulfill-1'),
+            stage: DeliveryStage::FULFILLMENT,
+            progress: new DeliveryProgress(current: 25, target: 100, percent: 25, unit: 'items'),
+            recordedAt: '2026-07-10T10:15:00Z',
+            source: ProgressSource::SYNCHRONIZATION,
+            meta: ['trace' => 'sync-1']
+        );
+
+        $serialized = $record->toArray();
+        $this->assertNull($serialized['id']);
+        $this->assertEquals(123, $serialized['order_id']);
+        $this->assertEquals(['id' => 456, 'key' => 'fulfill-1'], $serialized['delivery']);
+        $this->assertEquals('fulfillment', $serialized['stage']);
+        $this->assertEquals('synchronization', $serialized['source']);
+        $this->assertEquals('2026-07-10T10:15:00Z', $serialized['recorded_at']);
+        $this->assertEquals(25.0, $serialized['progress']['percent']);
+
+        $hydrated = Hydrator::hydrate(DeliveryProgressRecord::class, $serialized);
+        $this->assertTrue(Hydrator::compare($record, $hydrated));
+        $this->assertEquals(456, $hydrated->delivery->id);
+        $this->assertEquals('fulfill-1', $hydrated->delivery->key);
+
+        $query = new ProgressTimelineQuery();
+        $this->assertTrue($query->ascending);
+        $this->assertTrue(Hydrator::compare($query, Hydrator::hydrate(ProgressTimelineQuery::class, $query->toArray())));
+
+        $reference = new DeliveryReference(key: 'init-1');
+        $this->assertTrue(Hydrator::compare($reference, Hydrator::hydrate(DeliveryReference::class, $reference->toArray())));
+    }
+
+    public function testDeliveryProgressRepositoryRegistrationResolutionAndRecording(): void
+    {
+        $store = (new MockRuntimeRepository())->store;
+        Dgp::registerDeliveryProgressRepository(new MockDeliveryProgressRepository($store));
+
+        $result = Dgp::resolveDeliveryProgressRepository(HandlerReference::fromKey('jap'));
+        $this->assertTrue($result->isSuccess());
+
+        $repo = Dgp::deliveryProgressRepository(HandlerReference::fromKey('jap'));
+        $otherRepo = Dgp::deliveryProgressRepository(HandlerReference::fromKey('smm'));
+
+        $first = $repo->record(new DeliveryProgressRecord(
+            id: null,
+            orderId: 123,
+            delivery: new DeliveryReference(id: 10, key: 'init-del'),
+            stage: DeliveryStage::INITIALIZATION,
+            progress: new DeliveryProgress(percent: 10),
+            recordedAt: '2026-07-10T10:00:00Z',
+            source: ProgressSource::HANDLER
+        ))->value();
+        $this->assertNotNull($first);
+        $this->assertNotNull($first->id);
+
+        $repo->record(new DeliveryProgressRecord(
+            id: null,
+            orderId: 123,
+            delivery: new DeliveryReference(id: 10, key: 'init-del'),
+            stage: DeliveryStage::INITIALIZATION,
+            progress: new DeliveryProgress(percent: 50),
+            recordedAt: '2026-07-10T10:05:00Z',
+            source: ProgressSource::WEBHOOK
+        ));
+
+        $repo->record(new DeliveryProgressRecord(
+            id: null,
+            orderId: 999,
+            delivery: new DeliveryReference(key: 'other-del'),
+            stage: DeliveryStage::FULFILLMENT,
+            progress: new DeliveryProgress(percent: 90),
+            recordedAt: '2026-07-10T10:10:00Z',
+            source: ProgressSource::MANUAL
+        ));
+
+        $timeline = $repo->timeline(new DeliveryReference(id: 10))->value();
+        $this->assertCount(2, $timeline);
+        $this->assertEquals(10.0, $timeline[0]->progress->percent);
+        $this->assertEquals(50.0, $timeline[1]->progress->percent);
+
+        $webhookTimeline = $repo->timeline(
+            new DeliveryReference(key: 'init-del'),
+            new ProgressTimelineQuery(source: ProgressSource::WEBHOOK)
+        )->value();
+        $this->assertCount(1, $webhookTimeline);
+        $this->assertSame(ProgressSource::WEBHOOK, $webhookTimeline[0]->source);
+
+        $limitedDescending = $repo->timelineForOrder(
+            123,
+            new ProgressTimelineQuery(limit: 1, ascending: false)
+        )->value();
+        $this->assertCount(1, $limitedDescending);
+        $this->assertEquals(50.0, $limitedDescending[0]->progress->percent);
+
+        $this->assertCount(0, $otherRepo->timelineForOrder(123)->value());
+    }
+
+    public function testDeliveryProgressRepositoryMissingAndFailurePaths(): void
+    {
+        $missing = Dgp::resolveDeliveryProgressRepository(HandlerReference::fromKey('jap'));
+        $this->assertTrue($missing->isFailure());
+        $this->assertEquals('delivery_progress_repository_not_registered', $missing->error()?->code);
+
+        try {
+            Dgp::deliveryProgressRepository(HandlerReference::fromKey('jap'));
+            $this->fail('Expected missing delivery progress repository exception.');
+        } catch (DgpConfigurationException $exception) {
+            $this->assertEquals('delivery_progress_repository_not_registered', $exception->errorCode);
+        }
+
+        $store = (new MockRuntimeRepository())->store;
+        Dgp::registerDeliveryProgressRepository(new MockDeliveryProgressRepository($store));
+
+        try {
+            Dgp::deliveryProgressRepository(HandlerReference::fromId('unknown-handler'));
+            $this->fail('Expected delivery progress repository resolution exception.');
+        } catch (DgpConfigurationException $exception) {
+            $this->assertEquals('unknown_handler', $exception->errorCode);
+        }
     }
 }

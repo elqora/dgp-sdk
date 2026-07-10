@@ -10,23 +10,10 @@ use Elqora\Dgp\Runtime\References\StartResultReference;
 use Elqora\Dgp\Runtime\Queries\PlanQuery;
 use Elqora\Dgp\Runtime\Queries\StartResultQuery;
 use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
-use Elqora\Dgp\Runtime\RuntimeWriteOptions;
 use Elqora\Dgp\Runtime\OrderRuntimeView;
 
 interface HandlerRuntimeRepositoryContract
 {
-    /**
-     * @param string|int $orderId
-     * @param Plan $plan
-     * @param RuntimeWriteOptions|null $options
-     * @return Result<Plan>
-     */
-    public function savePlan(
-        string|int $orderId,
-        Plan $plan,
-        ?RuntimeWriteOptions $options = null,
-    ): Result;
-
     /**
      * @param string|int $orderId
      * @param PlanReference $reference
@@ -45,18 +32,6 @@ interface HandlerRuntimeRepositoryContract
     public function plans(
         string|int $orderId,
         ?PlanQuery $query = null,
-    ): Result;
-
-    /**
-     * @param string|int $planId
-     * @param StartResult $startResult
-     * @param RuntimeWriteOptions|null $options
-     * @return Result<StartResult>
-     */
-    public function saveStartResult(
-        string|int $planId,
-        StartResult $startResult,
-        ?RuntimeWriteOptions $options = null,
     ): Result;
 
     /**
@@ -101,18 +76,6 @@ interface HandlerRuntimeRepositoryContract
         string|int $orderId,
         StartResultReference $startResult,
         ?DeliveryQuery $query = null,
-    ): Result;
-
-    /**
-     * @param string|int $orderId
-     * @param list<\Elqora\Dgp\Deliveries\Delivery> $deliveries
-     * @param RuntimeWriteOptions|null $options
-     * @return Result<list<\Elqora\Dgp\Deliveries\Delivery>>
-     */
-    public function saveDeliveries(
-        string|int $orderId,
-        array $deliveries,
-        ?RuntimeWriteOptions $options = null,
     ): Result;
 
     /**
