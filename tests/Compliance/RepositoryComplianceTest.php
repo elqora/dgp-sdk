@@ -27,6 +27,7 @@ use Elqora\Dgp\Runtime\Queries\StartResultQuery;
 use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
 use Elqora\Dgp\Deliveries\DeliveryProgress;
+use Elqora\Dgp\Deliveries\DeliveryProgressSegment;
 use Elqora\Dgp\Deliveries\DeliveryStage;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
 use Elqora\Dgp\Actions\Contracts\NextAction;
@@ -422,7 +423,21 @@ class RepositoryComplianceTest extends TestCase
             orderId: 123,
             delivery: new DeliveryReference(id: 456, key: 'fulfill-1'),
             stage: DeliveryStage::FULFILLMENT,
-            progress: new DeliveryProgress(current: 25, target: 100, percent: 25, unit: 'items'),
+            progress: new DeliveryProgress(
+                current: 25,
+                target: 100,
+                percent: 25,
+                unit: 'items',
+                segments: [
+                    new DeliveryProgressSegment(
+                        key: 'provider-import',
+                        progress: new DeliveryProgress(current: 10, target: 40, percent: 25, unit: 'items'),
+                        label: 'Provider import',
+                        status: 'processing',
+                        sequence: 1
+                    ),
+                ]
+            ),
             recordedAt: '2026-07-10T10:15:00Z',
             source: ProgressSource::SYNCHRONIZATION,
             meta: ['trace' => 'sync-1']
@@ -436,6 +451,7 @@ class RepositoryComplianceTest extends TestCase
         $this->assertEquals('synchronization', $serialized['source']);
         $this->assertEquals('2026-07-10T10:15:00Z', $serialized['recorded_at']);
         $this->assertEquals(25.0, $serialized['progress']['percent']);
+        $this->assertEquals('provider-import', $serialized['progress']['segments'][0]['key']);
 
         $hydrated = Hydrator::hydrate(DeliveryProgressRecord::class, $serialized);
         $this->assertTrue(Hydrator::compare($record, $hydrated));

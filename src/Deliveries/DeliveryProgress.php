@@ -9,6 +9,7 @@ final readonly class DeliveryProgress implements Arrayable, JsonSerializable
 {
     /**
      * @param array<string, mixed>|null $meta
+     * @param list<DeliveryProgressSegment|array<string, mixed>> $segments
      */
     public function __construct(
         public int|float|string|null $current = null,
@@ -17,16 +18,45 @@ final readonly class DeliveryProgress implements Arrayable, JsonSerializable
         public ?string $unit = null,
         public ?string $label = null,
         public ?array $meta = null,
-    ) {}
+        array $segments = [],
+    ) {
+        $this->segments = self::normalizeSegments($segments);
+    }
+
+    /**
+     * @var list<DeliveryProgressSegment>
+     */
+    public array $segments;
 
     public static function fromValue(mixed $value): ?self
+    {
+        return self::fromValueInternal($value);
+    }
+
+    public static function fromSegmentValue(mixed $value): ?self
+    {
+        return self::fromValueInternal($value, false);
+    }
+
+    private static function fromValueInternal(mixed $value, bool $withSegments = true): ?self
     {
         if ($value === null) {
             return null;
         }
 
         if ($value instanceof self) {
-            return $value;
+            if ($withSegments || $value->segments === []) {
+                return $value;
+            }
+
+            return new self(
+                current: $value->current,
+                target: $value->target,
+                percent: $value->percent,
+                unit: $value->unit,
+                label: $value->label,
+                meta: $value->meta,
+            );
         }
 
         if (is_array($value)) {
@@ -37,6 +67,7 @@ final readonly class DeliveryProgress implements Arrayable, JsonSerializable
                 unit: $value['unit'] ?? null,
                 label: $value['label'] ?? null,
                 meta: $value['meta'] ?? null,
+                segments: $withSegments && is_array($value['segments'] ?? null) ? $value['segments'] : [],
             );
         }
 
@@ -52,6 +83,37 @@ final readonly class DeliveryProgress implements Arrayable, JsonSerializable
     }
 
     /**
+     * @param list<DeliveryProgressSegment|array<string, mixed>> $segments
+     * @return list<DeliveryProgressSegment>
+     */
+    private static function normalizeSegments(array $segments): array
+    {
+        $normalized = [];
+
+        foreach ($segments as $segment) {
+            if ($segment instanceof DeliveryProgressSegment) {
+                $normalized[] = $segment;
+                continue;
+            }
+
+            if (is_array($segment)) {
+                $normalized[] = new DeliveryProgressSegment(
+                    key: (string) ($segment['key'] ?? ''),
+                    progress: $segment['progress'] ?? null,
+                    label: isset($segment['label']) ? (string) $segment['label'] : null,
+                    status: isset($segment['status']) ? (string) $segment['status'] : null,
+                    sequence: isset($segment['sequence']) && (is_int($segment['sequence']) || is_float($segment['sequence']))
+                        ? $segment['sequence']
+                        : null,
+                    meta: is_array($segment['meta'] ?? null) ? $segment['meta'] : null,
+                );
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(): array
@@ -63,6 +125,7 @@ final readonly class DeliveryProgress implements Arrayable, JsonSerializable
             'unit' => $this->unit,
             'label' => $this->label,
             'meta' => $this->meta,
+            'segments' => array_map(fn (DeliveryProgressSegment $segment): array => $segment->toArray(), $this->segments),
         ];
     }
 

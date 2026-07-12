@@ -1,0 +1,48 @@
+<?php
+
+namespace Elqora\Dgp\Deliveries;
+
+use Elqora\Dgp\Support\Arrayable;
+use JsonSerializable;
+
+final readonly class DeliveryProgressSegment implements Arrayable, JsonSerializable
+{
+    /**
+     * @param array<string, mixed>|null $meta
+     */
+    public function __construct(
+        public string $key,
+        mixed $progress,
+        public ?string $label = null,
+        public ?string $status = null,
+        public int|float|null $sequence = null,
+        public ?array $meta = null,
+    ) {
+        $this->progress = DeliveryProgress::fromSegmentValue($progress) ?? new DeliveryProgress();
+    }
+
+    public DeliveryProgress $progress;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'key' => $this->key,
+            'progress' => $this->progress->toArray(),
+            'label' => $this->label,
+            'status' => $this->status,
+            'sequence' => $this->sequence,
+            'meta' => $this->meta,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
+    }
+}

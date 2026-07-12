@@ -64,6 +64,7 @@ use Elqora\Dgp\Money\Currency;
 use Elqora\Dgp\Money\Money;
 use Elqora\Dgp\Configuration\Dgp;
 use Elqora\Dgp\Deliveries\DeliveryProgress;
+use Elqora\Dgp\Deliveries\DeliveryProgressSegment;
 use Elqora\Dgp\Endpoints\HostEndpointType;
 use Elqora\Dgp\Events\DgpEvent;
 use Elqora\Dgp\Events\EventType;
@@ -412,6 +413,116 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals(25, $hydrated->progress->current);
         $this->assertEquals(100, $hydrated->progress->target);
         $this->assertEquals('items', $hydrated->progress->unit);
+    }
+
+    public function testDeliveryProgressSegmentsConstructHydrateAndSerialize(): void
+    {
+        $progress = new DeliveryProgress(
+            current: 50,
+            target: 100,
+            percent: 50,
+            unit: 'items',
+            segments: [
+                new DeliveryProgressSegment(
+                    key: 'phase-1',
+                    progress: new DeliveryProgress(current: 25, target: 50, percent: 50, unit: 'items'),
+                    label: 'Phase 1',
+                    status: 'processing',
+                    sequence: 1,
+                    meta: ['provider_batch' => 'batch-1']
+                ),
+            ]
+        );
+
+        $serialized = $progress->toArray();
+
+        $this->assertEquals(50.0, $serialized['percent']);
+        $this->assertCount(1, $serialized['segments']);
+        $this->assertEquals('phase-1', $serialized['segments'][0]['key']);
+        $this->assertEquals('Phase 1', $serialized['segments'][0]['label']);
+        $this->assertEquals('processing', $serialized['segments'][0]['status']);
+        $this->assertEquals(1, $serialized['segments'][0]['sequence']);
+        $this->assertEquals(['provider_batch' => 'batch-1'], $serialized['segments'][0]['meta']);
+        $this->assertEquals(25, $serialized['segments'][0]['progress']['current']);
+
+        $this->assertEquals($serialized, $progress->jsonSerialize());
+        $this->assertEquals($serialized, json_decode((string) json_encode($progress), true));
+    }
+
+    public function testDeliveryProgressHydratesSegmentArraysWithoutNestedSegments(): void
+    {
+        $progress = DeliveryProgress::fromValue([
+            'current' => 80,
+            'target' => 100,
+            'percent' => 80,
+            'unit' => 'items',
+            'segments' => [
+                [
+                    'key' => 'created',
+                    'progress' => [
+                        'current' => 30,
+                        'target' => 100,
+                        'percent' => 30,
+                        'unit' => 'items',
+                        'segments' => [
+                            [
+                                'key' => 'nested',
+                                'progress' => ['percent' => 10],
+                            ],
+                        ],
+                    ],
+                    'label' => 'Created',
+                    'status' => 'complete',
+                    'sequence' => 1,
+                ],
+                [
+                    'key' => 'delivered',
+                    'progress' => ['current' => 50, 'target' => 100, 'percent' => 50],
+                    'label' => 'Delivered',
+                    'status' => 'processing',
+                    'sequence' => 2.5,
+                ],
+            ],
+        ]);
+
+        $this->assertInstanceOf(DeliveryProgress::class, $progress);
+        $this->assertCount(2, $progress->segments);
+        $this->assertContainsOnlyInstancesOf(DeliveryProgressSegment::class, $progress->segments);
+        $this->assertEquals('created', $progress->segments[0]->key);
+        $this->assertEquals(30.0, $progress->segments[0]->progress->percent);
+        $this->assertSame([], $progress->segments[0]->progress->segments);
+        $this->assertEquals('delivered', $progress->segments[1]->key);
+        $this->assertEquals(2.5, $progress->segments[1]->sequence);
+    }
+
+    public function testDeliveryProgressHydratorSupportsSegmentsAndEmptyDefaults(): void
+    {
+        $empty = new DeliveryProgress(percent: 0);
+
+        $this->assertSame([], $empty->segments);
+        $this->assertSame([], $empty->toArray()['segments']);
+
+        $hydrated = Hydrator::hydrate(DeliveryProgress::class, [
+            'current' => 10,
+            'target' => 20,
+            'percent' => 50,
+            'segments' => [
+                [
+                    'key' => 'first-half',
+                    'progress' => ['current' => 10, 'target' => 20, 'percent' => 50],
+                    'label' => 'First half',
+                    'status' => 'complete',
+                    'meta' => ['source' => 'sync'],
+                ],
+            ],
+        ]);
+
+        $this->assertInstanceOf(DeliveryProgress::class, $hydrated);
+        $this->assertCount(1, $hydrated->segments);
+        $this->assertInstanceOf(DeliveryProgressSegment::class, $hydrated->segments[0]);
+        $this->assertEquals('first-half', $hydrated->segments[0]->key);
+        $this->assertEquals(50.0, $hydrated->segments[0]->progress->percent);
+        $this->assertEquals(['source' => 'sync'], $hydrated->segments[0]->meta);
     }
 
     public function testTypedHostEndpointResolutionKeepsGenericPath(): void

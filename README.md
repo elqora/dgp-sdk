@@ -319,6 +319,7 @@ Deliveries expose rendering fields directly instead of hiding them in `meta`: `k
 
 ```php
 use Elqora\Dgp\Deliveries\DeliveryProgress;
+use Elqora\Dgp\Deliveries\DeliveryProgressSegment;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
 
@@ -332,6 +333,26 @@ $delivery = new InitializationDelivery(
     name: 'Admin Review',
     isPublic: false,
     note: 'Internal preparation',
+);
+```
+
+Segmented progress can expose a one-level breakdown while keeping the parent `DeliveryProgress` authoritative as the aggregate.
+
+```php
+$progress = new DeliveryProgress(
+    current: 50,
+    target: 100,
+    percent: 50,
+    unit: 'items',
+    segments: [
+        new DeliveryProgressSegment(
+            key: 'provider-import',
+            progress: new DeliveryProgress(current: 20, target: 40, percent: 50, unit: 'items'),
+            label: 'Provider import',
+            status: 'processing',
+            sequence: 1,
+        ),
+    ],
 );
 ```
 
