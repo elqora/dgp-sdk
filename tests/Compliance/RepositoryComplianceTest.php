@@ -21,7 +21,9 @@ use Elqora\Dgp\Runtime\References\DeliveryReference;
 use Elqora\Dgp\Runtime\References\PlanReference;
 use Elqora\Dgp\Runtime\References\StartResultReference;
 use Elqora\Dgp\Runtime\Plan;
+use Elqora\Dgp\Runtime\PlanStatus;
 use Elqora\Dgp\Runtime\StartResult;
+use Elqora\Dgp\Runtime\StartResultStatus;
 use Elqora\Dgp\Runtime\Queries\PlanQuery;
 use Elqora\Dgp\Runtime\Queries\StartResultQuery;
 use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
@@ -553,5 +555,78 @@ class RepositoryComplianceTest extends TestCase
         } catch (DgpConfigurationException $exception) {
             $this->assertEquals('unknown_handler', $exception->errorCode);
         }
+    }
+
+    public function testRepositoryStatusUpdatesAndOptimisticConcurrency(): void
+    {
+        $runtimeRepo = new MockRuntimeRepository();
+        Dgp::registerRuntimeRepository($runtimeRepo);
+        /** @var \Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerRuntimeRepository $repo */
+        $repo = Dgp::runtimeRepository(HandlerReference::fromKey('jap'));
+
+        // 1. Seed plan & check initial status
+        $plan = new Plan(null, 'main-plan', [], [], null, [], 0);
+        $savedPlan = $runtimeRepo->seedPlan(HandlerReference::fromKey('jap'), 123, $plan)->value();
+        $this->assertNotNull($savedPlan);
+        /** @var Plan $savedPlan */
+        $this->assertEquals(PlanStatus::ACTIVE, $savedPlan->status);
+        $this->assertEquals(1, $savedPlan->revision);
+
+        $planId = $savedPlan->id;
+        $planKey = $savedPlan->key;
+        $this->assertNotNull($planId);
+
+        // 2. Update status and verify incremented revision
+        $updateRes = $repo->updatePlanStatus($planId, PlanStatus::CANCELLED);
+        $this->assertTrue($updateRes->isSuccess());
+
+        $fetchedPlan = $repo->findPlan(123, new PlanReference(id: $planId))->value();
+        $this->assertNotNull($fetchedPlan);
+        $this->assertEquals(PlanStatus::CANCELLED, $fetchedPlan->status);
+        $this->assertEquals(2, $fetchedPlan->revision);
+
+        // 3. revision conflict checking on Plan status update
+        $conflictRes = $repo->updatePlanStatus(
+            $planId,
+            PlanStatus::COMPLETED,
+            new \Elqora\Dgp\Runtime\RuntimeWriteOptions(expectedRevision: 1)
+        );
+        $this->assertTrue($conflictRes->isFailure());
+        $this->assertEquals('runtime_revision_conflict', $conflictRes->error()?->code);
+
+        // Verify status remains CANCELLED
+        $fetchedPlan2 = $repo->findPlan(123, new PlanReference(id: $planId))->value();
+        $this->assertNotNull($fetchedPlan2);
+        /** @var Plan $fetchedPlan2 */
+        $this->assertEquals(PlanStatus::CANCELLED, $fetchedPlan2->status);
+
+        // 4. Seed startResult & check initial status
+        $startResult = new StartResult(null, 'start-1', [], [], null, [], $planId, $planKey, 0);
+        $savedStart = $runtimeRepo->seedStartResult(HandlerReference::fromKey('jap'), $planId, $startResult)->value();
+        $this->assertNotNull($savedStart);
+        $this->assertEquals(StartResultStatus::RUNNING, $savedStart->status);
+        $this->assertEquals(1, $savedStart->revision);
+
+        $startId = $savedStart->id;
+        $this->assertNotNull($startId);
+
+        // 5. Update startResult status & verify incremented revision
+        $updateStartRes = $repo->updateStartResultStatus($startId, StartResultStatus::COMPLETED);
+        $this->assertTrue($updateStartRes->isSuccess());
+
+        $fetchedStart = $repo->findStartResult(123, new StartResultReference(id: $startId))->value();
+        $this->assertNotNull($fetchedStart);
+        /** @var StartResult $fetchedStart */
+        $this->assertEquals(StartResultStatus::COMPLETED, $fetchedStart->status);
+        $this->assertEquals(2, $fetchedStart->revision);
+
+        // 6. revision conflict checking on StartResult status update
+        $conflictStartRes = $repo->updateStartResultStatus(
+            $startId,
+            StartResultStatus::FAILED,
+            new \Elqora\Dgp\Runtime\RuntimeWriteOptions(expectedRevision: 1)
+        );
+        $this->assertTrue($conflictStartRes->isFailure());
+        $this->assertEquals('runtime_revision_conflict', $conflictStartRes->error()?->code);
     }
 }

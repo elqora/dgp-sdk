@@ -40,6 +40,8 @@ use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\StartRequest;
 use Elqora\Dgp\Runtime\RuntimeContext;
 use Elqora\Dgp\Runtime\References\PlanReference;
+use Elqora\Dgp\Runtime\PlanStatus;
+use Elqora\Dgp\Runtime\StartResultStatus;
 use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\ActionButtonKind;
@@ -1152,5 +1154,54 @@ class DriverComplianceTest extends TestCase
         $resSmm = $smm->health($request);
         $this->assertTrue($resSmm->isSuccess());
         $this->assertEquals('ok', $resSmm->value()->status->value);
+    }
+
+    public function testPlanAndStartResultStatusDtoVerification(): void
+    {
+        // 1. Plan status defaults and serialization
+        $plan = new Plan(
+            id: null,
+            key: 'main-plan',
+            state: []
+        );
+        $this->assertEquals(PlanStatus::ACTIVE, $plan->status);
+        $this->assertEquals('active', $plan->toArray()['status']);
+
+        // 2. Plan custom status serialization
+        $planCancelled = new Plan(
+            id: null,
+            key: 'main-plan',
+            state: [],
+            status: PlanStatus::CANCELLED
+        );
+        $this->assertEquals('cancelled', $planCancelled->toArray()['status']);
+
+        // 3. Plan hydration
+        $hydratedPlan = Hydrator::hydrate(Plan::class, $planCancelled->toArray());
+        $this->assertInstanceOf(Plan::class, $hydratedPlan);
+        $this->assertEquals(PlanStatus::CANCELLED, $hydratedPlan->status);
+
+        // 4. StartResult status defaults and serialization
+        $start = new StartResult(
+            id: null,
+            key: 'start-1',
+            state: []
+        );
+        $this->assertEquals(StartResultStatus::RUNNING, $start->status);
+        $this->assertEquals('running', $start->toArray()['status']);
+
+        // 5. StartResult custom status serialization
+        $startCompleted = new StartResult(
+            id: null,
+            key: 'start-1',
+            state: [],
+            status: StartResultStatus::COMPLETED
+        );
+        $this->assertEquals('completed', $startCompleted->toArray()['status']);
+
+        // 6. StartResult hydration
+        $hydratedStart = Hydrator::hydrate(StartResult::class, $startCompleted->toArray());
+        $this->assertInstanceOf(StartResult::class, $hydratedStart);
+        $this->assertEquals(StartResultStatus::COMPLETED, $hydratedStart->status);
     }
 }

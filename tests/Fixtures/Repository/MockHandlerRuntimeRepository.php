@@ -19,6 +19,8 @@ use Elqora\Dgp\Deliveries\Delivery;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
 use Elqora\Dgp\Deliveries\FulfillmentDelivery;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
+use Elqora\Dgp\Runtime\PlanStatus;
+use Elqora\Dgp\Runtime\StartResultStatus;
 
 class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
 {
@@ -193,6 +195,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
             id: $planId,
             key: $plan->key,
             state: $plan->state,
+            status: $plan->status,
             deliveries: $persistedDeliveries,
             nextAction: $plan->nextAction,
             meta: $plan->meta,
@@ -389,6 +392,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
             id: $startId,
             key: $startResult->key,
             state: $startResult->state,
+            status: $startResult->status,
             deliveries: $persistedDeliveries,
             nextAction: $startResult->nextAction,
             meta: $startResult->meta,
@@ -704,5 +708,116 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
         } else {
             $this->store['deliveries'][] = $record;
         }
+    }
+
+    public function updatePlanStatus(
+        string|int $planId,
+        PlanStatus $status,
+        ?RuntimeWriteOptions $options = null,
+    ): Result {
+        $existingIndex = null;
+        foreach ($this->store['plans'] as $idx => $item) {
+            if ($item['id'] == $planId && $item['handler'] == $this->getHandlerValue()) {
+                $existingIndex = $idx;
+                break;
+            }
+        }
+
+        if ($existingIndex === null) {
+            /** @var Result<bool> $fail */
+            $fail = Result::failure(new DgpError(
+                code: 'plan_not_found',
+                message: "Plan with ID {$planId} not found."
+            ));
+            return $fail;
+        }
+
+        $record = $this->store['plans'][$existingIndex];
+        /** @var Plan $currentPlan */
+        $currentPlan = $record['plan'];
+
+        if ($options !== null && $options->expectedRevision !== null) {
+            if ($options->expectedRevision !== $currentPlan->revision) {
+                /** @var Result<bool> $fail */
+                $fail = Result::failure(new DgpError(
+                    code: 'runtime_revision_conflict',
+                    message: "Plan revision conflict. Expected {$options->expectedRevision}, got {$currentPlan->revision}."
+                ));
+                return $fail;
+            }
+        }
+
+        $nextRevision = $currentPlan->revision + 1;
+        $updatedPlan = new Plan(
+            id: $currentPlan->id,
+            key: $currentPlan->key,
+            state: $currentPlan->state,
+            status: $status,
+            deliveries: $currentPlan->deliveries,
+            nextAction: $currentPlan->nextAction,
+            meta: $currentPlan->meta,
+            revision: $nextRevision,
+            orderId: $currentPlan->orderId,
+        );
+
+        $this->store['plans'][$existingIndex]['plan'] = $updatedPlan;
+
+        return Result::success(true);
+    }
+
+    public function updateStartResultStatus(
+        string|int $startResultId,
+        StartResultStatus $status,
+        ?RuntimeWriteOptions $options = null,
+    ): Result {
+        $existingIndex = null;
+        foreach ($this->store['start_results'] as $idx => $item) {
+            if ($item['id'] == $startResultId && $item['handler'] == $this->getHandlerValue()) {
+                $existingIndex = $idx;
+                break;
+            }
+        }
+
+        if ($existingIndex === null) {
+            /** @var Result<bool> $fail */
+            $fail = Result::failure(new DgpError(
+                code: 'start_result_not_found',
+                message: "StartResult with ID {$startResultId} not found."
+            ));
+            return $fail;
+        }
+
+        $record = $this->store['start_results'][$existingIndex];
+        /** @var StartResult $currentStart */
+        $currentStart = $record['start_result'];
+
+        if ($options !== null && $options->expectedRevision !== null) {
+            if ($options->expectedRevision !== $currentStart->revision) {
+                /** @var Result<bool> $fail */
+                $fail = Result::failure(new DgpError(
+                    code: 'runtime_revision_conflict',
+                    message: "StartResult revision conflict. Expected {$options->expectedRevision}, got {$currentStart->revision}."
+                ));
+                return $fail;
+            }
+        }
+
+        $nextRevision = $currentStart->revision + 1;
+        $updatedStart = new StartResult(
+            id: $currentStart->id,
+            key: $currentStart->key,
+            state: $currentStart->state,
+            status: $status,
+            deliveries: $currentStart->deliveries,
+            nextAction: $currentStart->nextAction,
+            meta: $currentStart->meta,
+            planId: $currentStart->planId,
+            planKey: $currentStart->planKey,
+            revision: $nextRevision,
+        );
+
+        $this->store['start_results'][$existingIndex]['start_result'] = $updatedStart;
+
+        return Result::success(true);
     }
 }

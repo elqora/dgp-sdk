@@ -11,6 +11,9 @@ use Elqora\Dgp\Runtime\Queries\PlanQuery;
 use Elqora\Dgp\Runtime\Queries\StartResultQuery;
 use Elqora\Dgp\Runtime\Queries\DeliveryQuery;
 use Elqora\Dgp\Runtime\OrderRuntimeView;
+use Elqora\Dgp\Runtime\PlanStatus;
+use Elqora\Dgp\Runtime\StartResultStatus;
+use Elqora\Dgp\Runtime\RuntimeWriteOptions;
 
 interface HandlerRuntimeRepositoryContract
 {
@@ -84,5 +87,29 @@ interface HandlerRuntimeRepositoryContract
      */
     public function runtime(
         string|int $orderId,
+    ): Result;
+
+    /**
+     * @param string|int $planId
+     * @param PlanStatus $status
+     * @param RuntimeWriteOptions|null $options
+     * @return Result<bool>
+     */
+    public function updatePlanStatus(
+        string|int $planId,
+        PlanStatus $status,
+        ?RuntimeWriteOptions $options = null,
+    ): Result;
+
+    /**
+     * @param string|int $startResultId
+     * @param StartResultStatus $status
+     * @param RuntimeWriteOptions|null $options
+     * @return Result<bool>
+     */
+    public function updateStartResultStatus(
+        string|int $startResultId,
+        StartResultStatus $status,
+        ?RuntimeWriteOptions $options = null,
     ): Result;
 }

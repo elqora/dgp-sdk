@@ -4,6 +4,7 @@ namespace Elqora\Dgp\Runtime;
 
 use Elqora\Dgp\Support\Arrayable;
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Runtime\PlanStatus;
 use JsonSerializable;
 
 final readonly class Plan implements Arrayable, JsonSerializable
@@ -22,6 +23,7 @@ final readonly class Plan implements Arrayable, JsonSerializable
         public array $meta = [],
         public int $revision = 0,
         public string|int|null $orderId = null,
+        public PlanStatus $status = PlanStatus::ACTIVE,
     ) {}
 
     /**
@@ -33,6 +35,7 @@ final readonly class Plan implements Arrayable, JsonSerializable
             'id' => $this->id,
             'key' => $this->key,
             'state' => $this->state,
+            'status' => $this->status->value,
             'deliveries' => array_map(fn ($d) => $d->toArray(), $this->deliveries),
             'next_action' => $this->nextAction?->toArray(),
             'meta' => $this->meta,
