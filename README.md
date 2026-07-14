@@ -137,11 +137,12 @@ $services = $snapshot->servicesForNode('option:quality-ultra');
 
 ## Runtime Lifecycle
 
-Initialization receives the host order identity, the resolved snapshot, and optional runtime context.
+Initialization receives the host order identity, the resolved snapshot, and optional runtime context. The returned `Plan` describes the execution structure, deliveries, next actions, and is initialized with a `PlanStatus` (e.g. `draft`, `active`, `completed`, `failed`, `cancelled`, `abandoned`).
 
 ```php
 use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\RuntimeContext;
+use Elqora\Dgp\Runtime\PlanStatus;
 
 $initialize = new InitializeRequest(
     orderId: 12345,
@@ -153,14 +154,16 @@ $initialize = new InitializeRequest(
 );
 
 $plan = $handler->initialize($initialize)->value();
+echo $plan->status->value; // 'active'
 ```
 
-Starting fulfillment carries the host order identity plus a reference to the persisted plan.
+Starting fulfillment carries the host order identity plus a reference to the persisted plan. The returned `StartResult` specifies the initial progress and carrying a `StartResultStatus` (e.g. `pending`, `running`, `completed`, `failed`, `cancelled`, `abandoned`).
 
 ```php
 use Elqora\Dgp\Runtime\References\PlanReference;
 use Elqora\Dgp\Runtime\RuntimeContext;
 use Elqora\Dgp\Runtime\StartRequest;
+use Elqora\Dgp\Runtime\StartResultStatus;
 
 $start = new StartRequest(
     orderId: 12345,
@@ -169,22 +172,27 @@ $start = new StartRequest(
 );
 
 $startResult = $handler->start($start)->value();
+echo $startResult->status->value; // 'running'
 ```
 
 ## Runtime State Through Host Ports
 
-Hosts can register handler-scoped ports through `Dgp`. The runtime repository is read-only from the handler-facing side.
+Hosts can register handler-scoped ports through `Dgp`. The repository allows looking up plans, start results, and delivery histories, and updating plan/start result statuses.
 
 ```php
 use Elqora\Dgp\Configuration\Dgp;
 use Elqora\Dgp\Runtime\References\HandlerReference;
 use Elqora\Dgp\Runtime\References\PlanReference;
+use Elqora\Dgp\Runtime\PlanStatus;
 
 Dgp::registerRuntimeRepository($runtimeRepository);
 
 $runtime = Dgp::runtimeRepository(HandlerReference::fromKey('smm-test'));
 $plan = $runtime->findPlan(12345, new PlanReference(key: 'plan-payment'))->value();
 $view = $runtime->runtime(12345)->value();
+
+// Update status directly via the repository
+$runtime->updatePlanStatus($plan->id, PlanStatus::CANCELLED);
 ```
 
 The SDK defines these interfaces only. Host implementations decide how returned state is stored, indexed, locked, versioned, authorized, and rendered.
@@ -478,6 +486,81 @@ $chart = Charts::line(
 );
 
 $analysis = new Analysis('delivery.throughput', $chart);
+```
+
+## Hooks & Event Ports
+
+The DGP SDK specifies interfaces for asynchronous update hooks and event dispatching. These hooks act as outbound ports allowing handlers/drivers to notify the host platform of asynchronous changes (such as webhook updates, delivery progress, or billing invoice transitions).
+
+### 1. Delivery Update Hook
+Used by drivers to push asynchronous status changes of individual deliveries back to the host platform:
+```php
+use Elqora\Dgp\Deliveries\Contracts\DeliveryUpdateHookContract;
+use Elqora\Dgp\Deliveries\DeliveryUpdateRequest;
+use Elqora\Dgp\Errors\Result;
+
+class MyDeliveryUpdateHook implements DeliveryUpdateHookContract
+{
+    public function update(DeliveryUpdateRequest $request): Result
+    {
+        // Host-side persistence/routing logic:
+        foreach ($request->deliveries as $delivery) {
+            $this->db->updateDeliveryStatus($request->orderId, $delivery->key, $delivery->status);
+        }
+        return Result::success(null);
+    }
+}
+```
+
+### 2. Charge Update Hook
+Used by drivers to push asynchronous billing transitions (e.g. charge creation, payment authorization, success, or failure events) back to the host platform:
+```php
+use Elqora\Dgp\Charges\Contracts\ChargeUpdateHookContract;
+use Elqora\Dgp\Charges\ChargeUpdateRequest;
+use Elqora\Dgp\Errors\Result;
+
+class MyChargeUpdateHook implements ChargeUpdateHookContract
+{
+    public function update(ChargeUpdateRequest $request): Result
+    {
+        // Host-side billing transition logic...
+        return Result::success(null);
+    }
+}
+```
+
+### 3. Event Hook
+A general, neutral channel for dispatching event telemetry (such as status updates or logs) from the driver to the host:
+```php
+use Elqora\Dgp\Events\Contracts\EventHookContract;
+use Elqora\Dgp\Events\DgpEvent;
+
+class MyEventHook implements EventHookContract
+{
+    public function dispatch(DgpEvent $event): void
+    {
+        // Emit or log the event...
+    }
+}
+```
+
+### 4. Webhook Receiver Contract
+Unlike the outbound hooks above, `WebhookContract` is an inbound port implemented by the handler to parse and verify incoming HTTP notifications sent by the external provider:
+```php
+use Elqora\Dgp\Events\Contracts\WebhookContract;
+use Elqora\Dgp\Events\WebhookRequest;
+use Elqora\Dgp\Errors\Result;
+
+class MyWebhookHandler implements WebhookContract
+{
+    public function handleWebhook(WebhookRequest $request): Result
+    {
+        // 1. Verify signatures in $request->headers
+        // 2. Decode $request->body
+        // 3. Return normalized DgpEvent payload
+        return Result::success($normalizedEvent);
+    }
+}
 ```
 
 ## Testing
