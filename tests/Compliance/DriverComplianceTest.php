@@ -73,6 +73,8 @@ use Elqora\ConfigKit\Schema\ConfigSchema;
 use Elqora\ConfigKit\Schema\UiConfigSchema;
 use Elqora\ConfigKit\Support\ConfigBag;
 use Elqora\ConfigKit\Support\ConfigValidationResult;
+use Elqora\Dgp\Balance\BalanceRequest;
+use Elqora\Dgp\Health\HealthRequest;
 use InvalidArgumentException;
 
 class DriverComplianceTest extends TestCase
@@ -1118,5 +1120,37 @@ class DriverComplianceTest extends TestCase
             nextAction: $redirectAction
         );
         $this->assertSame($redirectAction, $fulfillment->nextAction);
+    }
+
+    public function testBalanceContractSignatureAndHandlerImplementations(): void
+    {
+        $manual = new ManualTestHandler();
+        $smm = new SmmTestHandler();
+
+        $bag = new ConfigBag(false, ['base_url' => 'https://api.smm.example'], ['api_key' => 'secret']);
+        $request = new BalanceRequest(config: $bag, meta: ['trace' => true]);
+
+        $resManual = $manual->balance($request);
+        $this->assertTrue($resManual->isSuccess());
+
+        $resSmm = $smm->balance($request);
+        $this->assertTrue($resSmm->isSuccess());
+        $this->assertEquals('finite', $resSmm->value()->kind->value);
+    }
+
+    public function testHealthContractSignatureAndHandlerImplementations(): void
+    {
+        $manual = new ManualTestHandler();
+        $smm = new SmmTestHandler();
+
+        $bag = new ConfigBag(false, ['base_url' => 'https://api.smm.example'], ['api_key' => 'secret']);
+        $request = new HealthRequest(config: $bag, meta: ['trace' => true]);
+
+        $resManual = $manual->health($request);
+        $this->assertTrue($resManual->isSuccess());
+
+        $resSmm = $smm->health($request);
+        $this->assertTrue($resSmm->isSuccess());
+        $this->assertEquals('ok', $resSmm->value()->status->value);
     }
 }

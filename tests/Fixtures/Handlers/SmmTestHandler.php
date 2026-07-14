@@ -7,8 +7,10 @@ use Elqora\Dgp\Manifest\HandlerManifest;
 use Elqora\Dgp\Manifest\Capability;
 use Elqora\Dgp\Health\HandlerHealth;
 use Elqora\Dgp\Health\HealthStatus;
+use Elqora\Dgp\Health\HealthRequest;
 use Elqora\Dgp\Balance\HandlerBalance;
 use Elqora\Dgp\Balance\BalanceKind;
+use Elqora\Dgp\Balance\BalanceRequest;
 use Elqora\Dgp\Money\Money;
 use Elqora\Dgp\Money\Amount;
 use Elqora\Dgp\Money\Currency;
@@ -126,17 +128,19 @@ class SmmTestHandler implements DgpDriverContract
     }
 
     /**
+     * @param HealthRequest|null $request
      * @return Result<\Elqora\Dgp\Health\HandlerHealth>
      */
-    public function health(): Result
+    public function health(?HealthRequest $request = null): Result
     {
         return Result::success(new HandlerHealth(status: HealthStatus::OK));
     }
 
     /**
+     * @param BalanceRequest|null $request
      * @return Result<\Elqora\Dgp\Balance\HandlerBalance>
      */
-    public function balance(): Result
+    public function balance(?BalanceRequest $request = null): Result
     {
         return Result::success(new HandlerBalance(
             kind: BalanceKind::FINITE,
