@@ -28,6 +28,9 @@ use Elqora\Dgp\Ui\Contracts\UiManifestContract;
 use Elqora\Dgp\Events\Contracts\WebhookContract;
 use Elqora\Dgp\Assets\Contracts\PrivateAssetContract;
 use Elqora\Dgp\Runtime\Plan;
+use Elqora\Dgp\Runtime\PrepareRequest;
+use Elqora\Dgp\Runtime\PreparationResult;
+use Elqora\Dgp\Runtime\PreparationStatus;
 use Elqora\Dgp\Runtime\StartResult;
 use Elqora\Dgp\Support\Hydrator;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
@@ -808,6 +811,145 @@ class DriverComplianceTest extends TestCase
         $this->assertNotNull($hydrated->context);
         $this->assertEquals(['foo' => 'bar'], $hydrated->context->context);
         $this->assertEquals(['source' => 'admin'], $hydrated->meta);
+    }
+
+    public function testPrepareRequestRoundTripAndValidation(): void
+    {
+        $delivery = new InitializationDelivery(
+            id: 201,
+            key: 'probe',
+            status: DeliveryStatus::PENDING,
+            label: 'Probe allocation',
+            planId: 41
+        );
+
+        $plan = new Plan(
+            id: 41,
+            key: 'smm-plan',
+            state: ['allocation' => 'probe'],
+            deliveries: [$delivery],
+            revision: 3,
+            orderId: 123,
+            status: PlanStatus::ACTIVE
+        );
+
+        $request = new PrepareRequest(
+            orderId: 123,
+            plan: $plan,
+            context: new RuntimeContext(context: ['worker' => 'prep-1']),
+            meta: ['source' => 'queue']
+        );
+
+        $serialized = Hydrator::serialize($request);
+        $this->assertEquals(123, $serialized['order_id']);
+        $this->assertEquals(41, $serialized['plan']['id']);
+        $this->assertEquals(201, $serialized['plan']['deliveries'][0]['id']);
+
+        $hydrated = Hydrator::hydrate(PrepareRequest::class, $serialized);
+        $this->assertEquals(123, $hydrated->orderId);
+        $this->assertEquals(41, $hydrated->plan->id);
+        $this->assertEquals(201, $hydrated->plan->deliveries[0]->id);
+        $this->assertEquals(['worker' => 'prep-1'], $hydrated->context?->context);
+        $this->assertEquals(['source' => 'queue'], $hydrated->meta);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Preparation requires a persisted plan ID.');
+        new PrepareRequest(
+            orderId: 123,
+            plan: new Plan(null, 'transient-plan', [])
+        );
+    }
+
+    public function testPrepareRequestRejectsUnpersistedDeliveries(): void
+    {
+        $plan = new Plan(
+            id: 41,
+            key: 'smm-plan',
+            state: [],
+            deliveries: [
+                new InitializationDelivery(
+                    id: null,
+                    key: 'probe',
+                    status: DeliveryStatus::PENDING,
+                    label: 'Probe allocation',
+                    planId: 41
+                ),
+            ]
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Preparation requires persisted delivery IDs.');
+        new PrepareRequest(orderId: 123, plan: $plan);
+    }
+
+    public function testPreparationResultRoundTripAndDeliveryPreservation(): void
+    {
+        $delivery = new InitializationDelivery(
+            id: 201,
+            key: 'probe',
+            status: DeliveryStatus::PROCESSING,
+            label: 'Probe allocation',
+            progress: new DeliveryProgress(current: 1, target: 2, percent: 50, unit: 'segments'),
+            planId: 41,
+            meta: ['provider_order_id' => '918273']
+        );
+
+        $result = new PreparationResult(
+            planId: 41,
+            status: PreparationStatus::RUNNING,
+            deliveries: [$delivery],
+            state: ['claimed' => true],
+            meta: ['attempt' => 1]
+        );
+
+        $serialized = Hydrator::serialize($result);
+        $this->assertEquals(41, $serialized['plan_id']);
+        $this->assertEquals('running', $serialized['status']);
+        $this->assertEquals(201, $serialized['deliveries'][0]['id']);
+        $this->assertEquals(41, $serialized['deliveries'][0]['plan_id']);
+
+        $hydrated = Hydrator::hydrate(PreparationResult::class, $serialized);
+        $this->assertEquals(41, $hydrated->planId);
+        $this->assertEquals(PreparationStatus::RUNNING, $hydrated->status);
+        $this->assertEquals(201, $hydrated->deliveries[0]->id);
+        $this->assertEquals(41, $hydrated->deliveries[0]->planId);
+        $this->assertEquals('918273', $hydrated->deliveries[0]->meta['provider_order_id']);
+    }
+
+    public function testHandlerPreparationUpdatesInitializationDeliveriesOnly(): void
+    {
+        $handler = new SmmTestHandler();
+        $plan = new Plan(
+            id: 41,
+            key: 'smm-plan',
+            state: ['allocation' => 'probe'],
+            deliveries: [
+                new InitializationDelivery(
+                    id: 201,
+                    key: 'probe',
+                    status: DeliveryStatus::PENDING,
+                    label: 'Probe allocation',
+                    planId: 41,
+                    meta: ['segment_key' => 'probe-a']
+                ),
+            ],
+            revision: 1,
+            orderId: 123
+        );
+
+        $result = $handler->prepare(new PrepareRequest(orderId: 123, plan: $plan))->value();
+
+        $this->assertEquals(41, $result->planId);
+        $this->assertEquals(PreparationStatus::RUNNING, $result->status);
+        $this->assertCount(1, $result->deliveries);
+        $this->assertInstanceOf(InitializationDelivery::class, $result->deliveries[0]);
+        $this->assertEquals(201, $result->deliveries[0]->id);
+        $this->assertEquals('probe', $result->deliveries[0]->key);
+        $this->assertEquals(41, $result->deliveries[0]->planId);
+        $this->assertNull($result->deliveries[0]->startId);
+        $this->assertEquals(DeliveryStatus::PROCESSING, $result->deliveries[0]->status);
+        $this->assertTrue($result->deliveries[0]->meta['prepared']);
+        $this->assertEquals('probe-a', $result->deliveries[0]->meta['segment_key']);
     }
 
     public function testGenericActionRequestRoundTrip(): void

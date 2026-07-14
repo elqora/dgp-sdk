@@ -157,6 +157,24 @@ $plan = $handler->initialize($initialize)->value();
 echo $plan->status->value; // 'active'
 ```
 
+After initialization, the host persists the plan and its initialization deliveries. Preparation receives that persisted, hydrated `Plan` object, including persisted delivery IDs, and can update those same initialization deliveries before fulfillment starts. The passed plan is an input snapshot; handlers may still use host repositories for freshness checks, locks, claims, or retry protection where the host implementation supports them.
+
+```php
+use Elqora\Dgp\Runtime\PrepareRequest;
+use Elqora\Dgp\Runtime\PreparationStatus;
+
+$persistedPlan = $runtimeStore->savePlan($plan);
+
+$prepare = new PrepareRequest(
+    orderId: $persistedPlan->orderId,
+    plan: $persistedPlan,
+    context: new RuntimeContext(context: ['ip' => '127.0.0.1']),
+);
+
+$preparation = $handler->prepare($prepare)->value();
+echo $preparation->status->value; // 'running'
+```
+
 Starting fulfillment carries the host order identity plus a reference to the persisted plan. The returned `StartResult` specifies the initial progress and carrying a `StartResultStatus` (e.g. `pending`, `running`, `completed`, `failed`, `cancelled`, `abandoned`).
 
 ```php

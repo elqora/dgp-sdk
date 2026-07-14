@@ -4,6 +4,7 @@ namespace Elqora\Dgp\Runtime\Contracts;
 
 use Elqora\Dgp\Errors\Result;
 use Elqora\Dgp\Runtime\InitializeRequest;
+use Elqora\Dgp\Runtime\PrepareRequest;
 use Elqora\Dgp\Runtime\StartRequest;
 use Elqora\Dgp\Runtime\SynchronizeRequest;
 use Elqora\Dgp\Runtime\CancelRequest;
@@ -17,6 +18,14 @@ interface RuntimeContract
      * @return Result<\Elqora\Dgp\Runtime\Plan>
      */
     public function initialize(InitializeRequest $request): Result;
+
+    /**
+     * Prepare a persisted plan before fulfillment starts.
+     *
+     * @param PrepareRequest $request
+     * @return Result<\Elqora\Dgp\Runtime\PreparationResult>
+     */
+    public function prepare(PrepareRequest $request): Result;
 
     /**
      * Start order fulfillment.

@@ -22,6 +22,9 @@ use Elqora\Dgp\Catalog\Schemas\ServiceSchemaQuery;
 use Elqora\Dgp\Catalog\Schemas\ServiceSchemaDefinition;
 use Elqora\Dgp\Catalog\Schemas\ServiceProps;
 use Elqora\Dgp\Runtime\InitializeRequest;
+use Elqora\Dgp\Runtime\PrepareRequest;
+use Elqora\Dgp\Runtime\PreparationResult;
+use Elqora\Dgp\Runtime\PreparationStatus;
 use Elqora\Dgp\Runtime\StartRequest;
 use Elqora\Dgp\Runtime\SynchronizeRequest;
 use Elqora\Dgp\Runtime\CancelRequest;
@@ -31,6 +34,8 @@ use Elqora\ConfigKit\Support\ConfigBag;
 use Elqora\ConfigKit\Support\ConfigValidationResult;
 use Elqora\Dgp\Runtime\Plan;
 use Elqora\Dgp\Runtime\StartResult;
+use Elqora\Dgp\Deliveries\DeliveryStatus;
+use Elqora\Dgp\Deliveries\InitializationDelivery;
 use Elqora\Dgp\Deliveries\ResolveOrderDeliveriesRequest;
 use Elqora\Dgp\Management\ResolveOrderManagementRequest;
 use Elqora\Dgp\Management\OrderManagement;
@@ -149,6 +154,40 @@ class ManualTestHandler implements DgpDriverContract, ServiceSchemaCatalogContra
             state: ['approved' => false]
         );
         return Result::success($plan);
+    }
+
+    /**
+     * @return Result<\Elqora\Dgp\Runtime\PreparationResult>
+     */
+    public function prepare(PrepareRequest $request): Result
+    {
+        /** @var string|int $planId */
+        $planId = $request->plan->id;
+
+        $deliveries = array_map(
+            fn (InitializationDelivery $delivery): InitializationDelivery => new InitializationDelivery(
+                id: $delivery->id,
+                key: $delivery->key,
+                status: DeliveryStatus::COMPLETED,
+                label: $delivery->label,
+                progress: $delivery->progress,
+                planId: $delivery->planId,
+                nextAction: $delivery->nextAction,
+                meta: array_merge($delivery->meta, ['prepared' => true]),
+                kind: $delivery->kind,
+                name: $delivery->name,
+                isPublic: $delivery->isPublic,
+                note: $delivery->note,
+            ),
+            $request->plan->deliveries
+        );
+
+        return Result::success(new PreparationResult(
+            planId: $planId,
+            status: PreparationStatus::COMPLETED,
+            deliveries: $deliveries,
+            state: ['prepared' => true]
+        ));
     }
 
     /**
