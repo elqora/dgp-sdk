@@ -547,29 +547,9 @@ $analysis = new Analysis('delivery.throughput', $chart);
 
 ## Hooks & Event Ports
 
-The DGP SDK specifies interfaces for asynchronous update hooks and event dispatching. These hooks act as outbound ports allowing handlers/drivers to notify the host platform of asynchronous changes (such as webhook updates, delivery progress, or billing invoice transitions).
+The DGP SDK specifies interfaces for asynchronous update hooks and event dispatching. These hooks act as outbound ports allowing handlers/drivers to notify the host platform of asynchronous changes (such as webhook updates or billing invoice transitions).
 
-### 1. Delivery Update Hook
-Used by drivers to push asynchronous status changes of individual deliveries back to the host platform:
-```php
-use Elqora\Dgp\Deliveries\Contracts\DeliveryUpdateHookContract;
-use Elqora\Dgp\Deliveries\DeliveryUpdateRequest;
-use Elqora\Dgp\Errors\Result;
-
-class MyDeliveryUpdateHook implements DeliveryUpdateHookContract
-{
-    public function update(DeliveryUpdateRequest $request): Result
-    {
-        // Host-side persistence/routing logic:
-        foreach ($request->deliveries as $delivery) {
-            $this->db->updateDeliveryStatus($request->orderId, $delivery->key, $delivery->status);
-        }
-        return Result::success(null);
-    }
-}
-```
-
-### 2. Charge Update Hook
+### 1. Charge Update Hook
 Used by drivers to push asynchronous billing transitions (e.g. charge creation, payment authorization, success, or failure events) back to the host platform:
 ```php
 use Elqora\Dgp\Charges\Contracts\ChargeUpdateHookContract;

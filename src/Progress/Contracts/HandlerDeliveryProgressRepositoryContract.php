@@ -31,4 +31,13 @@ interface HandlerDeliveryProgressRepositoryContract
         string|int $orderId,
         ?ProgressTimelineQuery $query = null,
     ): Result;
+
+    /**
+     * @return Result<DeliveryProgressRecord>
+     */
+    public function recordSegmentProgress(
+        DeliveryReference $delivery,
+        string $segmentKey,
+        DeliveryProgressRecord $record,
+    ): Result;
 }

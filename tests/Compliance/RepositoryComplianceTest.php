@@ -940,4 +940,133 @@ class RepositoryComplianceTest extends TestCase
         $this->assertTrue($conflictStartRes->isFailure());
         $this->assertEquals('runtime_revision_conflict', $conflictStartRes->error()?->code);
     }
+
+    public function testAppendOnlyDeliveriesAndProgressSegmentOperations(): void
+    {
+        $handler = HandlerReference::fromKey('jap');
+        $runtimeRepository = new MockRuntimeRepository();
+        Dgp::registerRuntimeRepository($runtimeRepository);
+        Dgp::registerDeliveriesRepository(new MockDeliveriesRepository($runtimeRepository->store));
+        Dgp::registerDeliveryProgressRepository(new MockDeliveryProgressRepository($runtimeRepository->store));
+
+        // 1. Seed order and plan to support deliveries parent relationship
+        $plan = new Plan(
+            id: null,
+            key: 'test-plan-keys',
+            state: [],
+            deliveries: []
+        );
+        $savedPlan = $runtimeRepository->seedPlan($handler, 123, $plan)->value();
+        $this->assertNotNull($savedPlan);
+        $this->assertNotNull($savedPlan->id);
+
+        $deliveries = Dgp::deliveriesRepository($handler);
+        $this->assertNotNull($deliveries);
+
+        // 2. Add single delivery
+        $newDel = new InitializationDelivery(
+            id: null,
+            key: 'init-probe-1',
+            status: DeliveryStatus::PENDING,
+            label: 'Probe account validation',
+            progress: null,
+            planId: $savedPlan->id
+        );
+        
+        $addedRes = $deliveries->addDelivery($newDel);
+        $this->assertTrue($addedRes->isSuccess());
+        /** @var InitializationDelivery $addedDel */
+        $addedDel = $addedRes->value();
+        $this->assertNotNull($addedDel->id);
+        $this->assertEquals('init-probe-1', $addedDel->key);
+        $this->assertTrue($addedDel->isPublic);
+
+        // Find delivery by ID
+        $found = $deliveries->findDelivery(new DeliveryReference(id: $addedDel->id))->value();
+        $this->assertNotNull($found);
+        $this->assertEquals('init-probe-1', $found->key);
+
+        // 3. Add segment to delivery
+        $segment = new DeliveryProgressSegment(
+            key: 'probe-probe',
+            progress: 0.5,
+            label: 'Initial probe',
+            status: 'processing',
+            sequence: 1,
+            isPublic: false
+        );
+
+        $addSegRes = $deliveries->addSegment(new DeliveryReference(id: $addedDel->id), $segment);
+        $this->assertTrue($addSegRes->isSuccess());
+        $this->assertEquals('probe-probe', $addSegRes->value()->key);
+        $this->assertFalse($addSegRes->value()->isPublic);
+
+        // Find delivery and assert segment is added
+        $foundWithSeg = $deliveries->findDelivery(new DeliveryReference(id: $addedDel->id))->value();
+        $this->assertNotNull($foundWithSeg);
+        $this->assertNotNull($foundWithSeg->progress);
+        $this->assertCount(1, $foundWithSeg->progress->segments);
+        $this->assertFalse($foundWithSeg->progress->segments[0]->isPublic);
+
+        // 4. Update delivery status & visibility
+        $updateStatusRes = $deliveries->updateDeliveryStatus(new DeliveryReference(id: $addedDel->id), DeliveryStatus::FAILED);
+        $this->assertTrue($updateStatusRes->isSuccess());
+
+        $updateVisRes = $deliveries->updateDeliveryVisibility(new DeliveryReference(id: $addedDel->id), false);
+        $this->assertTrue($updateVisRes->isSuccess());
+
+        $foundUpdated = $deliveries->findDelivery(new DeliveryReference(id: $addedDel->id))->value();
+        $this->assertNotNull($foundUpdated);
+        /** @var \Elqora\Dgp\Deliveries\Delivery $foundUpdated */
+        $this->assertEquals(DeliveryStatus::FAILED, $foundUpdated->status);
+        $this->assertFalse($foundUpdated->isPublic);
+
+        // 5. Update segment status & visibility
+        $upSegStatusRes = $deliveries->updateSegmentStatus(new DeliveryReference(id: $addedDel->id), 'probe-probe', 'failed');
+        $this->assertTrue($upSegStatusRes->isSuccess());
+
+        $upSegVisRes = $deliveries->updateSegmentVisibility(new DeliveryReference(id: $addedDel->id), 'probe-probe', true);
+        $this->assertTrue($upSegVisRes->isSuccess());
+
+        $foundUpdatedSeg = $deliveries->findDelivery(new DeliveryReference(id: $addedDel->id))->value();
+        $this->assertNotNull($foundUpdatedSeg);
+        /** @var \Elqora\Dgp\Deliveries\Delivery $foundUpdatedSeg */
+        $this->assertNotNull($foundUpdatedSeg->progress);
+        $this->assertEquals('failed', $foundUpdatedSeg->progress->segments[0]->status);
+        $this->assertTrue($foundUpdatedSeg->progress->segments[0]->isPublic);
+
+        // 6. Record progress for delivery segment
+        $progressHandler = Dgp::deliveryProgressRepository($handler);
+        $this->assertNotNull($progressHandler);
+
+        $record = new DeliveryProgressRecord(
+            id: null,
+            orderId: 123,
+            delivery: new DeliveryReference(id: $addedDel->id),
+            stage: DeliveryStage::INITIALIZATION,
+            progress: new DeliveryProgress(current: 50, target: 100, percent: 50),
+            recordedAt: '2026-07-15T11:00:00Z',
+            source: ProgressSource::SYNCHRONIZATION
+        );
+
+        $recRes = $progressHandler->recordSegmentProgress(new DeliveryReference(id: $addedDel->id), 'probe-probe', $record);
+        $this->assertTrue($recRes->isSuccess());
+        $this->assertEquals('probe-probe', $recRes->value()->segmentKey);
+
+        // Query timeline for segment
+        $timelineRes = $progressHandler->timeline(
+            new DeliveryReference(id: $addedDel->id),
+            new ProgressTimelineQuery(segmentKey: 'probe-probe')
+        );
+        $this->assertTrue($timelineRes->isSuccess());
+        $this->assertCount(1, $timelineRes->value());
+        $this->assertEquals('probe-probe', $timelineRes->value()[0]->segmentKey);
+
+        // Query timeline for non-existent segment
+        $timelineRes2 = $progressHandler->timeline(
+            new DeliveryReference(id: $addedDel->id),
+            new ProgressTimelineQuery(segmentKey: 'non-existent')
+        );
+        $this->assertCount(0, $timelineRes2->value());
+    }
 }

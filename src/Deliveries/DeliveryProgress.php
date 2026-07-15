@@ -106,6 +106,7 @@ final readonly class DeliveryProgress implements Arrayable, JsonSerializable
                         ? $segment['sequence']
                         : null,
                     meta: is_array($segment['meta'] ?? null) ? $segment['meta'] : null,
+                    isPublic: isset($segment['is_public']) ? (bool) $segment['is_public'] : true,
                 );
             }
         }

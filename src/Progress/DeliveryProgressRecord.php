@@ -22,6 +22,7 @@ final readonly class DeliveryProgressRecord implements Arrayable, JsonSerializab
         public string $recordedAt,
         public ?ProgressSource $source = null,
         public ?array $meta = null,
+        public ?string $segmentKey = null,
     ) {}
 
     /**
@@ -38,6 +39,7 @@ final readonly class DeliveryProgressRecord implements Arrayable, JsonSerializab
             'recorded_at' => $this->recordedAt,
             'source' => $this->source?->value,
             'meta' => $this->meta,
+            'segment_key' => $this->segmentKey,
         ];
     }
 

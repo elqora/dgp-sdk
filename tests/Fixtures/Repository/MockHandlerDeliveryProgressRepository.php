@@ -67,6 +67,43 @@ class MockHandlerDeliveryProgressRepository implements HandlerDeliveryProgressRe
         return Result::success($records);
     }
 
+    public function recordSegmentProgress(
+        DeliveryReference $delivery,
+        string $segmentKey,
+        DeliveryProgressRecord $record,
+    ): Result {
+        $persisted = $record->id === null
+            ? new DeliveryProgressRecord(
+                id: self::$autoIncrement++,
+                orderId: $record->orderId,
+                delivery: $delivery,
+                stage: $record->stage,
+                progress: $record->progress,
+                recordedAt: $record->recordedAt,
+                source: $record->source,
+                meta: $record->meta,
+                segmentKey: $segmentKey,
+            )
+            : new DeliveryProgressRecord(
+                id: $record->id,
+                orderId: $record->orderId,
+                delivery: $delivery,
+                stage: $record->stage,
+                progress: $record->progress,
+                recordedAt: $record->recordedAt,
+                source: $record->source,
+                meta: $record->meta,
+                segmentKey: $segmentKey,
+            );
+
+        $this->store['progress_records'][] = [
+            'handler' => $this->handler->value,
+            'record' => $persisted,
+        ];
+
+        return Result::success($persisted);
+    }
+
     /**
      * @return list<DeliveryProgressRecord>
      */
@@ -104,6 +141,10 @@ class MockHandlerDeliveryProgressRepository implements HandlerDeliveryProgressRe
             }
 
             if ($query->to !== null && strcmp($record->recordedAt, $query->to) > 0) {
+                continue;
+            }
+
+            if ($query->segmentKey !== null && $record->segmentKey !== $query->segmentKey) {
                 continue;
             }
 

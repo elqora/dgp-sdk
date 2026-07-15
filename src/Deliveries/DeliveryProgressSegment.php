@@ -17,6 +17,7 @@ final readonly class DeliveryProgressSegment implements Arrayable, JsonSerializa
         public ?string $status = null,
         public int|float|null $sequence = null,
         public ?array $meta = null,
+        public bool $isPublic = true,
     ) {
         $this->progress = DeliveryProgress::fromSegmentValue($progress) ?? new DeliveryProgress();
     }
@@ -35,6 +36,7 @@ final readonly class DeliveryProgressSegment implements Arrayable, JsonSerializa
             'status' => $this->status,
             'sequence' => $this->sequence,
             'meta' => $this->meta,
+            'is_public' => $this->isPublic,
         ];
     }
 

@@ -18,6 +18,7 @@ final readonly class ProgressTimelineQuery implements Arrayable, JsonSerializabl
         public ?string $cursor = null,
         public bool $ascending = true,
         public ?array $meta = null,
+        public ?string $segmentKey = null,
     ) {}
 
     /**
@@ -33,6 +34,7 @@ final readonly class ProgressTimelineQuery implements Arrayable, JsonSerializabl
             'cursor' => $this->cursor,
             'ascending' => $this->ascending,
             'meta' => $this->meta,
+            'segment_key' => $this->segmentKey,
         ];
     }
 

@@ -436,7 +436,8 @@ class DriverComplianceTest extends TestCase
                     label: 'Phase 1',
                     status: 'processing',
                     sequence: 1,
-                    meta: ['provider_batch' => 'batch-1']
+                    meta: ['provider_batch' => 'batch-1'],
+                    isPublic: true
                 ),
             ]
         );
@@ -450,6 +451,7 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals('processing', $serialized['segments'][0]['status']);
         $this->assertEquals(1, $serialized['segments'][0]['sequence']);
         $this->assertEquals(['provider_batch' => 'batch-1'], $serialized['segments'][0]['meta']);
+        $this->assertTrue($serialized['segments'][0]['is_public']);
         $this->assertEquals(25, $serialized['segments'][0]['progress']['current']);
 
         $this->assertEquals($serialized, $progress->jsonSerialize());
