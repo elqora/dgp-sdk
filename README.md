@@ -74,6 +74,7 @@ Examples:
 - `ServicesRepositoryContract` resolves handler-scoped service catalog/state access.
 - `DeliveriesRepositoryContract` exposes persisted delivery lookups.
 - `DeliveryProgressRepositoryContract` records and reads historical delivery progress observations.
+- `AuditRepositoryContract` records and reads meaningful operational and domain evidence.
 - `InsightsRepositoryContract` exposes insight snapshot updates.
 
 Handlers return normalized runtime state. The host persists plans, start results, and deliveries automatically, then exposes persisted state through host-provided ports. The SDK still owns no storage backend. A host can implement ports with SQL, files, queues, remote APIs, memory, or any other storage model.
@@ -404,6 +405,44 @@ $progress->record(new DeliveryProgressRecord(
     progress: new DeliveryProgress(current: 50, target: 100, percent: 50, unit: 'items'),
     recordedAt: '2026-07-10T10:15:00Z',
     source: ProgressSource::SYNCHRONIZATION,
+));
+```
+
+## Audits
+
+The audit repository is a host-provided, handler-scoped persistence port. Handlers may record meaningful operational or domain occurrences that the host may need to inspect later, such as provider rejection, exhausted fallback services, invalid webhook signatures, rejected refill requests, unsupported provider statuses, insufficient provider balance, synchronization inconsistencies, or manual administrator intervention.
+
+Audits preserve evidence for later review. They are separate from debug logs, events, progress timelines, and insights:
+
+- `Result` informs the immediate caller.
+- Events notify listeners that something happened.
+- Progress records delivery progress changes.
+- Insights aggregate stored data into analysis.
+- Audits preserve meaningful evidence for later inspection.
+
+The host controls audit storage, retention, redaction, authorization, indexing, and presentation. The SDK does not automatically audit every `Result::failure()` or every event; the handler decides which occurrences are important enough to preserve. Avoid audit records for routine execution noise such as entering a method, request started, or loop iteration completed.
+
+```php
+use Elqora\Dgp\Audits\AuditLevel;
+use Elqora\Dgp\Audits\AuditRecord;
+use Elqora\Dgp\Configuration\Dgp;
+use Elqora\Dgp\Runtime\References\DeliveryReference;
+use Elqora\Dgp\Runtime\References\HandlerReference;
+
+Dgp::registerAuditRepository($auditRepository);
+
+$audits = Dgp::auditRepository(HandlerReference::fromKey('smm-test'));
+$audits->record(new AuditRecord(
+    id: null,
+    key: 'provider.submission_failed',
+    level: AuditLevel::ERROR,
+    message: 'Provider rejected the submitted order.',
+    occurredAt: '2026-07-15T08:30:00Z',
+    orderId: 12345,
+    delivery: new DeliveryReference(key: 'fulfillment'),
+    category: 'provider',
+    code: 'provider_rejected',
+    context: ['provider_status' => 'rejected'],
 ));
 ```
 

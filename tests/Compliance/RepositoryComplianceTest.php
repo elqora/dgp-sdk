@@ -8,9 +8,13 @@ use Elqora\Chart\Data\TabularData;
 use Elqora\Chart\Enums\ChartType;
 use Elqora\Chart\Enums\ValueType;
 use Elqora\Chart\Series\Series;
+use Elqora\Dgp\Audits\AuditLevel;
+use Elqora\Dgp\Audits\AuditQuery;
+use Elqora\Dgp\Audits\AuditRecord;
 use Elqora\Dgp\Configuration\Dgp;
 use Elqora\Dgp\Catalog\Services\HandlerService;
 use Elqora\Dgp\Errors\DgpConfigurationException;
+use Elqora\Dgp\Manifest\Capability;
 use Elqora\Dgp\Insights\Analysis;
 use Elqora\Dgp\Insights\Leaderboard;
 use Elqora\Dgp\Insights\LeaderboardEntry;
@@ -43,8 +47,10 @@ use Elqora\Dgp\Tests\Fixtures\Repository\MockServicesRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerServicesRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockDeliveriesRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockDeliveryProgressRepository;
+use Elqora\Dgp\Tests\Fixtures\Repository\MockAuditRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockInsightsRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerInsightsRepository;
+use InvalidArgumentException;
 
 class RepositoryComplianceTest extends TestCase
 {
@@ -72,7 +78,7 @@ class RepositoryComplianceTest extends TestCase
         parent::setUp();
         // Reset registered repositories
         $ref = new \ReflectionClass(Dgp::class);
-        foreach (['runtimeRepository', 'servicesRepository', 'deliveriesRepository', 'insightsRepository', 'deliveryProgressRepository'] as $property) {
+        foreach (['runtimeRepository', 'servicesRepository', 'deliveriesRepository', 'insightsRepository', 'deliveryProgressRepository', 'auditRepository'] as $property) {
             $prop = $ref->getProperty($property);
             $prop->setAccessible(true);
             $prop->setValue(null, null);
@@ -552,6 +558,229 @@ class RepositoryComplianceTest extends TestCase
         try {
             Dgp::deliveryProgressRepository(HandlerReference::fromId('unknown-handler'));
             $this->fail('Expected delivery progress repository resolution exception.');
+        } catch (DgpConfigurationException $exception) {
+            $this->assertEquals('unknown_handler', $exception->errorCode);
+        }
+    }
+
+    public function testAuditRecordQueryAndCapabilitySerializationRoundTrips(): void
+    {
+        $record = new AuditRecord(
+            id: null,
+            key: 'provider.submission_failed',
+            level: AuditLevel::ERROR,
+            message: 'Provider rejected the submitted order.',
+            occurredAt: '2026-07-15T08:30:00Z',
+            orderId: 123,
+            delivery: new DeliveryReference(id: 456, key: 'fulfill-1'),
+            category: 'provider',
+            code: 'provider_rejected',
+            context: ['provider_order_id' => 'P-100'],
+            meta: ['redacted' => true],
+        );
+
+        $serialized = $record->toArray();
+        $this->assertEquals('error', AuditLevel::ERROR->value);
+        $this->assertEquals('audits', Capability::AUDITS->value);
+        $this->assertNull($serialized['id']);
+        $this->assertEquals('provider.submission_failed', $serialized['key']);
+        $this->assertEquals('error', $serialized['level']);
+        $this->assertEquals('Provider rejected the submitted order.', $serialized['message']);
+        $this->assertEquals('2026-07-15T08:30:00Z', $serialized['occurred_at']);
+        $this->assertEquals(123, $serialized['order_id']);
+        $this->assertEquals(['id' => 456, 'key' => 'fulfill-1'], $serialized['delivery']);
+        $this->assertEquals('provider_rejected', $serialized['code']);
+
+        $hydrated = Hydrator::hydrate(AuditRecord::class, $serialized);
+        $this->assertTrue(Hydrator::compare($record, $hydrated));
+        $this->assertSame(AuditLevel::ERROR, $hydrated->level);
+        $this->assertEquals(456, $hydrated->delivery?->id);
+        $this->assertEquals('fulfill-1', $hydrated->delivery?->key);
+
+        $query = new AuditQuery(
+            level: AuditLevel::WARNING,
+            category: 'provider',
+            code: 'unknown_status',
+            orderId: 123,
+            delivery: new DeliveryReference(key: 'fulfill-1'),
+            from: '2026-07-15T08:00:00Z',
+            to: '2026-07-15T09:00:00Z',
+            limit: 10,
+            cursor: 'cursor-1',
+            meta: ['include_context' => true],
+        );
+
+        $querySerialized = $query->toArray();
+        $this->assertFalse((new AuditQuery())->ascending);
+        $this->assertEquals('warning', $querySerialized['level']);
+        $this->assertEquals(['id' => null, 'key' => 'fulfill-1'], $querySerialized['delivery']);
+        $this->assertFalse($querySerialized['ascending']);
+        $this->assertTrue(Hydrator::compare($query, Hydrator::hydrate(AuditQuery::class, $querySerialized)));
+    }
+
+    public function testAuditRecordValidation(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Audit record key must not be empty.');
+
+        new AuditRecord(
+            id: null,
+            key: ' ',
+            level: AuditLevel::ERROR,
+            message: 'Provider rejected the submitted order.',
+            occurredAt: '2026-07-15T08:30:00Z',
+        );
+    }
+
+    public function testAuditRecordRejectsUnstableKey(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Audit record key must be a stable identifier.');
+
+        new AuditRecord(
+            id: null,
+            key: 'provider failed',
+            level: AuditLevel::ERROR,
+            message: 'Provider rejected the submitted order.',
+            occurredAt: '2026-07-15T08:30:00Z',
+        );
+    }
+
+    public function testAuditRecordRejectsEmptyMessage(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Audit record message must not be empty.');
+
+        new AuditRecord(
+            id: null,
+            key: 'provider.submission_failed',
+            level: AuditLevel::ERROR,
+            message: ' ',
+            occurredAt: '2026-07-15T08:30:00Z',
+        );
+    }
+
+    public function testAuditRecordRejectsEmptyOccurredAt(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Audit record occurredAt must not be empty.');
+
+        new AuditRecord(
+            id: null,
+            key: 'provider.submission_failed',
+            level: AuditLevel::ERROR,
+            message: 'Provider rejected the submitted order.',
+            occurredAt: ' ',
+        );
+    }
+
+    public function testAuditRepositoryRegistrationResolutionRecordingAndFiltering(): void
+    {
+        $store = (new MockRuntimeRepository())->store;
+        Dgp::registerAuditRepository(new MockAuditRepository($store));
+
+        $result = Dgp::resolveAuditRepository(HandlerReference::fromKey('jap'));
+        $this->assertTrue($result->isSuccess());
+
+        $repo = Dgp::auditRepository(HandlerReference::fromKey('jap'));
+        $otherRepo = Dgp::auditRepository(HandlerReference::fromKey('smm'));
+
+        $first = $repo->record(new AuditRecord(
+            id: null,
+            key: 'provider.submission_failed',
+            level: AuditLevel::ERROR,
+            message: 'Provider rejected the submitted order.',
+            occurredAt: '2026-07-15T08:00:00Z',
+            orderId: 123,
+            delivery: new DeliveryReference(id: 10, key: 'fulfill-1'),
+            category: 'provider',
+            code: 'provider_rejected',
+            context: ['provider_order_id' => 'P-100'],
+        ))->value();
+        $this->assertNotNull($first->id);
+
+        $repo->record(new AuditRecord(
+            id: null,
+            key: 'provider.unknown_status',
+            level: AuditLevel::WARNING,
+            message: 'The handler received an unsupported provider status.',
+            occurredAt: '2026-07-15T08:05:00Z',
+            orderId: 123,
+            delivery: new DeliveryReference(id: 10, key: 'fulfill-1'),
+            category: 'provider',
+            code: 'unknown_status',
+        ));
+
+        $repo->record(new AuditRecord(
+            id: null,
+            key: 'fallback.exhausted',
+            level: AuditLevel::CRITICAL,
+            message: 'All fallback services were exhausted.',
+            occurredAt: '2026-07-15T08:10:00Z',
+            orderId: 999,
+            delivery: new DeliveryReference(key: 'fallback-1'),
+            category: 'fallback',
+            code: 'exhausted',
+        ));
+
+        $records = $repo->records()->value();
+        $this->assertCount(3, $records);
+        $this->assertEquals('fallback.exhausted', $records[0]->key);
+        $this->assertEquals('provider.submission_failed', $records[2]->key);
+
+        $ascending = $repo->records(new AuditQuery(ascending: true))->value();
+        $this->assertEquals('provider.submission_failed', $ascending[0]->key);
+
+        $limited = $repo->records(new AuditQuery(limit: 1))->value();
+        $this->assertCount(1, $limited);
+        $this->assertEquals('fallback.exhausted', $limited[0]->key);
+
+        $orderRecords = $repo->recordsForOrder(123)->value();
+        $this->assertCount(2, $orderRecords);
+
+        $deliveryRecords = $repo->records(new AuditQuery(delivery: new DeliveryReference(key: 'fulfill-1')))->value();
+        $this->assertCount(2, $deliveryRecords);
+
+        $warningRecords = $repo->records(new AuditQuery(level: AuditLevel::WARNING))->value();
+        $this->assertCount(1, $warningRecords);
+        $this->assertEquals('provider.unknown_status', $warningRecords[0]->key);
+
+        $providerRecords = $repo->records(new AuditQuery(category: 'provider'))->value();
+        $this->assertCount(2, $providerRecords);
+
+        $codeRecords = $repo->records(new AuditQuery(code: 'provider_rejected'))->value();
+        $this->assertCount(1, $codeRecords);
+        $this->assertEquals('provider.submission_failed', $codeRecords[0]->key);
+
+        $dateRecords = $repo->records(new AuditQuery(
+            from: '2026-07-15T08:01:00Z',
+            to: '2026-07-15T08:09:00Z',
+        ))->value();
+        $this->assertCount(1, $dateRecords);
+        $this->assertEquals('provider.unknown_status', $dateRecords[0]->key);
+
+        $this->assertCount(0, $otherRepo->records()->value());
+    }
+
+    public function testAuditRepositoryMissingAndFailurePaths(): void
+    {
+        $missing = Dgp::resolveAuditRepository(HandlerReference::fromKey('jap'));
+        $this->assertTrue($missing->isFailure());
+        $this->assertEquals('audit_repository_not_registered', $missing->error()?->code);
+
+        try {
+            Dgp::auditRepository(HandlerReference::fromKey('jap'));
+            $this->fail('Expected missing audit repository exception.');
+        } catch (DgpConfigurationException $exception) {
+            $this->assertEquals('audit_repository_not_registered', $exception->errorCode);
+        }
+
+        $store = (new MockRuntimeRepository())->store;
+        Dgp::registerAuditRepository(new MockAuditRepository($store));
+
+        try {
+            Dgp::auditRepository(HandlerReference::fromId('unknown-handler'));
+            $this->fail('Expected audit repository resolution exception.');
         } catch (DgpConfigurationException $exception) {
             $this->assertEquals('unknown_handler', $exception->errorCode);
         }

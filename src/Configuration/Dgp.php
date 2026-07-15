@@ -2,6 +2,8 @@
 
 namespace Elqora\Dgp\Configuration;
 
+use Elqora\Dgp\Audits\Contracts\AuditRepositoryContract;
+use Elqora\Dgp\Audits\Contracts\HandlerAuditRepositoryContract;
 use Elqora\Dgp\Catalog\Services\Contracts\ServicesRepositoryContract;
 use Elqora\Dgp\Catalog\Services\Contracts\HandlerServicesRepositoryContract;
 use Elqora\Dgp\Deliveries\Contracts\DeliveriesRepositoryContract;
@@ -27,6 +29,7 @@ final class Dgp
     private static ?DeliveriesRepositoryContract $deliveriesRepository = null;
     private static ?InsightsRepositoryContract $insightsRepository = null;
     private static ?DeliveryProgressRepositoryContract $deliveryProgressRepository = null;
+    private static ?AuditRepositoryContract $auditRepository = null;
 
     public static function endpointPrefix(string $prefix): void
     {
@@ -104,6 +107,12 @@ final class Dgp
         DeliveryProgressRepositoryContract $repository
     ): void {
         self::$deliveryProgressRepository = $repository;
+    }
+
+    public static function registerAuditRepository(
+        AuditRepositoryContract $repository
+    ): void {
+        self::$auditRepository = $repository;
     }
 
     /**
@@ -297,6 +306,47 @@ final class Dgp
             throw new DgpConfigurationException(
                 errorCode: $error?->code ?? 'delivery_progress_repository_resolution_failed',
                 message: $error?->message ?? 'The handler delivery progress repository could not be resolved.',
+            );
+        }
+
+        return $result->value();
+    }
+
+    /**
+     * @return Result<HandlerAuditRepositoryContract>
+     */
+    public static function resolveAuditRepository(
+        HandlerReference $handler
+    ): Result {
+        if (self::$auditRepository === null) {
+            /** @var Result<HandlerAuditRepositoryContract> $fail */
+            $fail = Result::failure(new DgpError(
+                code: 'audit_repository_not_registered',
+                message: 'No DGP audit repository has been registered.'
+            ));
+            return $fail;
+        }
+
+        return self::$auditRepository->forHandler($handler);
+    }
+
+    public static function auditRepository(
+        HandlerReference $handler
+    ): HandlerAuditRepositoryContract {
+        if (self::$auditRepository === null) {
+            throw new DgpConfigurationException(
+                errorCode: 'audit_repository_not_registered',
+                message: 'No DGP audit repository has been registered.'
+            );
+        }
+
+        $result = self::$auditRepository->forHandler($handler);
+
+        if ($result->isFailure()) {
+            $error = $result->error();
+            throw new DgpConfigurationException(
+                errorCode: $error?->code ?? 'audit_repository_resolution_failed',
+                message: $error?->message ?? 'The handler audit repository could not be resolved.',
             );
         }
 
