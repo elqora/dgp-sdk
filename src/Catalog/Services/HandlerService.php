@@ -24,6 +24,8 @@ final readonly class HandlerService implements Arrayable, JsonSerializable
         public int $max = 1,
         ServiceCapabilitySet|array $capabilities = [],
         ServiceMeta|array|null $meta = null,
+        public HandlerServiceState $state = HandlerServiceState::ENABLED,
+        public ?string $stateReason = null,
     ) {
         $this->capabilities = $capabilities instanceof ServiceCapabilitySet
             ? $capabilities
@@ -46,6 +48,8 @@ final readonly class HandlerService implements Arrayable, JsonSerializable
             'max' => $this->max,
             'capabilities' => $this->capabilities->toArray(),
             'meta' => $this->meta->toArray(),
+            'state' => $this->state->value,
+            'state_reason' => $this->stateReason,
         ];
     }
 

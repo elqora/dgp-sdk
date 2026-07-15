@@ -3,6 +3,7 @@
 namespace Elqora\Dgp\Catalog\Services\Contracts;
 
 use Elqora\Dgp\Catalog\Services\HandlerService;
+use Elqora\Dgp\Catalog\Services\HandlerServiceLookupResult;
 use Elqora\Dgp\Catalog\Services\ServiceQuery;
 use Elqora\Dgp\Errors\Result;
 
@@ -13,6 +14,12 @@ interface HandlerServicesRepositoryContract
      * @return Result<HandlerService|null>
      */
     public function findService(string|int $serviceId): Result;
+
+    /**
+     * @param list<string|int> $serviceIds
+     * @return Result<HandlerServiceLookupResult>
+     */
+    public function findServices(array $serviceIds): Result;
 
     /**
      * @param ServiceQuery|null $query

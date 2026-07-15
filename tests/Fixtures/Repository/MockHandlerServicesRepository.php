@@ -4,6 +4,8 @@ namespace Elqora\Dgp\Tests\Fixtures\Repository;
 
 use Elqora\Dgp\Catalog\Services\Contracts\HandlerServicesRepositoryContract;
 use Elqora\Dgp\Catalog\Services\HandlerService;
+use Elqora\Dgp\Catalog\Services\HandlerServiceLookupResult;
+use Elqora\Dgp\Catalog\Services\HandlerServiceState;
 use Elqora\Dgp\Catalog\Services\ServiceQuery;
 use Elqora\Dgp\Errors\DgpError;
 use Elqora\Dgp\Errors\Result;
@@ -42,7 +44,74 @@ class MockHandlerServicesRepository implements HandlerServicesRepositoryContract
 
         /** @var HandlerService|null $service */
         $service = is_array($record) ? ($record['service'] ?? null) : null;
-        return Result::success($service);
+        if ($service === null) {
+            return Result::success(null);
+        }
+
+        $stateRecord = $this->store['service_states'][$this->key($serviceId)] ?? null;
+        $state = HandlerServiceState::ENABLED;
+        $reason = null;
+
+        if ($stateRecord !== null) {
+            $stateStr = $stateRecord['state'] ?? 'enabled';
+            if ($stateStr === 'unlocked') {
+                $stateStr = 'enabled';
+            }
+            $state = HandlerServiceState::tryFrom($stateStr) ?? HandlerServiceState::ENABLED;
+            $reason = $stateRecord['reason'] ?? null;
+        }
+
+        $projectedService = new HandlerService(
+            id: $service->id,
+            name: $service->name,
+            description: $service->description,
+            category: $service->category,
+            rate: $service->rate,
+            min: $service->min,
+            max: $service->max,
+            capabilities: $service->capabilities,
+            meta: $service->meta,
+            state: $state,
+            stateReason: $reason
+        );
+
+        return Result::success($projectedService);
+    }
+
+    public function findServices(array $serviceIds): Result
+    {
+        if (empty($serviceIds)) {
+            return Result::success(new HandlerServiceLookupResult([], []));
+        }
+
+        $uniqueIds = [];
+        foreach ($serviceIds as $id) {
+            if (!in_array($id, $uniqueIds, true)) {
+                $uniqueIds[] = $id;
+            }
+        }
+
+        $services = [];
+        $missingIds = [];
+
+        foreach ($uniqueIds as $id) {
+            $findResult = $this->findService($id);
+            if ($findResult->isFailure()) {
+                $error = $findResult->error();
+                /** @var Result<HandlerServiceLookupResult> $fail */
+                $fail = Result::failure($error ?? new DgpError('unknown_error', 'An unknown error occurred.'));
+                return $fail;
+            }
+
+            $service = $findResult->value();
+            if ($service !== null) {
+                $services[] = $service;
+            } else {
+                $missingIds[] = $id;
+            }
+        }
+
+        return Result::success(new HandlerServiceLookupResult($services, $missingIds));
     }
 
     public function services(?ServiceQuery $query = null): Result
@@ -58,6 +127,38 @@ class MockHandlerServicesRepository implements HandlerServicesRepositoryContract
 
             /** @var HandlerService $service */
             $service = $record['service'];
+
+            // Retrieve current operational state from store for this service
+            $stateRecord = $this->store['service_states'][$this->key($service->id)] ?? null;
+            $state = HandlerServiceState::ENABLED;
+            $reason = null;
+
+            if ($stateRecord !== null) {
+                $stateStr = $stateRecord['state'] ?? 'enabled';
+                if ($stateStr === 'unlocked') {
+                    $stateStr = 'enabled';
+                }
+                $state = HandlerServiceState::tryFrom($stateStr) ?? HandlerServiceState::ENABLED;
+                $reason = $stateRecord['reason'] ?? null;
+            }
+
+            // Apply filter based on includeUnavailable/states in ServiceQuery
+            if (!$query->includeUnavailable) {
+                if ($query->states !== null) {
+                    if (!in_array($state, $query->states, true)) {
+                        continue;
+                    }
+                } else {
+                    if ($state !== HandlerServiceState::ENABLED) {
+                        continue;
+                    }
+                }
+            } else {
+                if ($query->states !== null && !in_array($state, $query->states, true)) {
+                    continue;
+                }
+            }
+
             if ($query->category !== null && $service->category !== $query->category) {
                 continue;
             }
@@ -73,7 +174,21 @@ class MockHandlerServicesRepository implements HandlerServicesRepositoryContract
                 continue;
             }
 
-            $services[] = $service;
+            $projectedService = new HandlerService(
+                id: $service->id,
+                name: $service->name,
+                description: $service->description,
+                category: $service->category,
+                rate: $service->rate,
+                min: $service->min,
+                max: $service->max,
+                capabilities: $service->capabilities,
+                meta: $service->meta,
+                state: $state,
+                stateReason: $reason
+            );
+
+            $services[] = $projectedService;
             if (count($services) >= $query->limit) {
                 break;
             }
@@ -99,7 +214,7 @@ class MockHandlerServicesRepository implements HandlerServicesRepositoryContract
 
     public function unlock(string|int $serviceId, string $reason): Result
     {
-        return $this->saveServiceState($serviceId, 'unlocked', $reason);
+        return $this->saveServiceState($serviceId, 'enabled', $reason);
     }
 
     /**

@@ -306,15 +306,97 @@ class RepositoryComplianceTest extends TestCase
 
         $state = $japRepo->serviceState(103);
         $this->assertNotNull($state);
-        $this->assertEquals('unlocked', $state['state']);
+        $this->assertEquals('enabled', $state['state']);
         $this->assertEquals('Delivery metrics recovered.', $state['reason']);
         $this->assertNull($smmRepo->serviceState(103));
+
+        // Verify projected state on findService
+        $service103 = $japRepo->findService(103)->value();
+        $this->assertNotNull($service103);
+        $this->assertEquals(\Elqora\Dgp\Catalog\Services\HandlerServiceState::ENABLED, $service103->state);
+        $this->assertEquals('Delivery metrics recovered.', $service103->stateReason);
+
+        $service102 = $japRepo->findService(102)->value();
+        $this->assertNotNull($service102);
+        $this->assertEquals(\Elqora\Dgp\Catalog\Services\HandlerServiceState::DISABLED, $service102->state);
+        $this->assertEquals('Upstream maintenance.', $service102->stateReason);
 
         $emptyReason = $japRepo->disable(104, '   ');
         $this->assertTrue($emptyReason->isFailure());
         $error = $emptyReason->error();
         $this->assertNotNull($error);
         $this->assertEquals('service_state_reason_required', $error->code);
+    }
+
+    public function testServiceQueryStateFiltering(): void
+    {
+        $store = (new MockRuntimeRepository())->store;
+        $servicesRepo = new MockServicesRepository($store);
+        $servicesRepo->seedServices(HandlerReference::fromKey('jap'), [
+            new HandlerService(101, 'Premium delivery', category: 'delivery'),
+            new HandlerService(102, 'Standard delivery', category: 'delivery'),
+            new HandlerService(103, 'Risky delivery', category: 'delivery'),
+        ]);
+        Dgp::registerServicesRepository($servicesRepo);
+        $japRepo = Dgp::servicesRepository(HandlerReference::fromKey('jap'));
+
+        // Set some states
+        $japRepo->disable(102, 'Maintenance');
+        $japRepo->lock(103, 'Investigation');
+
+        // By default, query filters to only ENABLED services
+        $enabledServices = $japRepo->services(new \Elqora\Dgp\Catalog\Services\ServiceQuery())->value();
+        $this->assertCount(1, $enabledServices);
+        $this->assertEquals(101, $enabledServices[0]->id);
+
+        // Include unavailable returns all services
+        $allServices = $japRepo->services(new \Elqora\Dgp\Catalog\Services\ServiceQuery(includeUnavailable: true))->value();
+        $this->assertCount(3, $allServices);
+
+        // Filter specifically by states (LOCKED, DISABLED)
+        $filteredServices = $japRepo->services(new \Elqora\Dgp\Catalog\Services\ServiceQuery(
+            states: [\Elqora\Dgp\Catalog\Services\HandlerServiceState::LOCKED, \Elqora\Dgp\Catalog\Services\HandlerServiceState::DISABLED]
+        ))->value();
+        $this->assertCount(2, $filteredServices);
+        $ids = array_map(fn ($s) => $s->id, $filteredServices);
+        $this->assertContains(102, $ids);
+        $this->assertContains(103, $ids);
+    }
+
+    public function testBulkServiceLookup(): void
+    {
+        $store = (new MockRuntimeRepository())->store;
+        $servicesRepo = new MockServicesRepository($store);
+        $servicesRepo->seedServices(HandlerReference::fromKey('jap'), [
+            new HandlerService(101, 'Premium delivery', category: 'delivery'),
+            new HandlerService(102, 'Standard delivery', category: 'delivery'),
+            new HandlerService(103, 'Risky delivery', category: 'delivery'),
+        ]);
+        Dgp::registerServicesRepository($servicesRepo);
+        $japRepo = Dgp::servicesRepository(HandlerReference::fromKey('jap'));
+
+        // 1. Successful lookup preserving order and resolving duplicates
+        $lookupResult = $japRepo->findServices([103, 101, 103, 102])->value();
+        $this->assertNotNull($lookupResult);
+        $this->assertInstanceOf(\Elqora\Dgp\Catalog\Services\HandlerServiceLookupResult::class, $lookupResult);
+        
+        $this->assertCount(3, $lookupResult->services);
+        $this->assertEquals(103, $lookupResult->services[0]->id);
+        $this->assertEquals(101, $lookupResult->services[1]->id);
+        $this->assertEquals(102, $lookupResult->services[2]->id);
+        $this->assertEmpty($lookupResult->missingIds);
+
+        // 2. Lookup with missing IDs
+        $lookupResultWithMissing = $japRepo->findServices([101, 999, 102, 888])->value();
+        $this->assertCount(2, $lookupResultWithMissing->services);
+        $this->assertEquals(101, $lookupResultWithMissing->services[0]->id);
+        $this->assertEquals(102, $lookupResultWithMissing->services[1]->id);
+        $this->assertEquals([999, 888], $lookupResultWithMissing->missingIds);
+
+        // 3. Lookup with empty input
+        $emptyLookup = $japRepo->findServices([])->value();
+        $this->assertEmpty($emptyLookup->services);
+        $this->assertEmpty($emptyLookup->missingIds);
     }
 
     public function testInsightUpdatesStoreHandlerScopedSnapshots(): void
