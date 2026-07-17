@@ -45,16 +45,16 @@
         },
         {
             "name": "elqora/config-kit",
-            "version": "1.0.0",
+            "version": "1.0.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/elqora/config-kit.git",
-                "reference": "f5e3adbd6f27dea3796c04ef769ae249709dcf05"
+                "reference": "9b52446d2b63f41f41233568d47c2005fbb113ca"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/elqora/config-kit/zipball/f5e3adbd6f27dea3796c04ef769ae249709dcf05",
-                "reference": "f5e3adbd6f27dea3796c04ef769ae249709dcf05",
+                "url": "https://api.github.com/repos/elqora/config-kit/zipball/9b52446d2b63f41f41233568d47c2005fbb113ca",
+                "reference": "9b52446d2b63f41f41233568d47c2005fbb113ca",
                 "shasum": ""
             },
             "require-dev": {
@@ -79,9 +79,9 @@
             "description": "SDK config schema designed to provide a general shape for Input field configurations",
             "support": {
                 "issues": "https://github.com/elqora/config-kit/issues",
-                "source": "https://github.com/elqora/config-kit/tree/1.0.0"
+                "source": "https://github.com/elqora/config-kit/tree/1.0.2"
             },
-            "time": "2026-07-08T15:53:52+00:00"
+            "time": "2026-07-17T08:17:37+00:00"
         }
     ],
     "packages-dev": [
