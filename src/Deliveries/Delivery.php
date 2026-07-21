@@ -2,14 +2,18 @@
 
 namespace Elqora\Dgp\Deliveries;
 
-use Elqora\Dgp\Support\Arrayable;
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\ActionValidator;
+use Elqora\Dgp\Support\Arrayable;
+use InvalidArgumentException;
 use JsonSerializable;
 
 abstract readonly class Delivery implements Arrayable, JsonSerializable
 {
     /**
      * @param array<string, mixed> $meta
+     * @param list<\Elqora\Dgp\Actions\ActionButton> $buttons
      */
     public function __construct(
         public string|int|null $id,
@@ -26,7 +30,14 @@ abstract readonly class Delivery implements Arrayable, JsonSerializable
         public ?string $name = null,
         public bool $isPublic = true,
         public ?string $note = null,
+        public array $buttons = [],
     ) {
+        $errors = ActionValidator::validateButtons($buttons);
+
+        if ($errors !== []) {
+            throw new InvalidArgumentException(reset($errors));
+        }
+
         $this->progress = DeliveryProgress::fromValue($progress);
     }
 
@@ -50,6 +61,7 @@ abstract readonly class Delivery implements Arrayable, JsonSerializable
             'progress' => $this->progress?->toArray(),
             'plan_id' => $this->planId,
             'start_id' => $this->startId,
+            'buttons' => array_map(fn (ActionButton $button) => $button->toArray(), $this->buttons),
             'next_action' => $this->nextAction?->toArray(),
             'meta' => $this->meta,
         ];

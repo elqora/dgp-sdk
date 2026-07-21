@@ -184,6 +184,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
 
             // Save to store
@@ -201,6 +202,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
             meta: $plan->meta,
             revision: $nextRevision,
             orderId: $orderId,
+            buttons: $plan->buttons,
         );
 
         $planRecord = [
@@ -382,6 +384,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
 
             $this->storeDelivery($orderId, $startId, $persistedDel);
@@ -398,7 +401,8 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
             meta: $startResult->meta,
             planId: $planId,
             planKey: $parentPlan->key,
-            revision: $nextRevision
+            revision: $nextRevision,
+            buttons: $startResult->buttons,
         );
 
         $startRecord = [
@@ -600,6 +604,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                     name: $del->name,
                     isPublic: $del->isPublic,
                     note: $del->note,
+                    buttons: $del->buttons,
                 );
             } else {
                 $persistedDel = new FulfillmentDelivery(
@@ -615,6 +620,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
                     name: $del->name,
                     isPublic: $del->isPublic,
                     note: $del->note,
+                    buttons: $del->buttons,
                 );
             }
 
@@ -758,6 +764,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
             meta: $currentPlan->meta,
             revision: $nextRevision,
             orderId: $currentPlan->orderId,
+            buttons: $currentPlan->buttons,
         );
 
         $this->store['plans'][$existingIndex]['plan'] = $updatedPlan;
@@ -814,6 +821,7 @@ class MockHandlerRuntimeRepository implements HandlerRuntimeRepositoryContract
             planId: $currentStart->planId,
             planKey: $currentStart->planKey,
             revision: $nextRevision,
+            buttons: $currentStart->buttons,
         );
 
         $this->store['start_results'][$existingIndex]['start_result'] = $updatedStart;

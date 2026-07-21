@@ -53,6 +53,8 @@ final class Hydrator
                     $hydratedAction = self::hydrate($concreteClass, $data);
                     return $hydratedAction;
                 }
+
+                throw new InvalidArgumentException("Unsupported next action type '{$data['type']}'.");
             }
         }
 
@@ -89,7 +91,7 @@ final class Hydrator
             throw new InvalidArgumentException("Data for class {$class} must be an array or map to a single constructor parameter.");
         }
 
-        $data = self::liftLegacyButtonAction($class, $data);
+        $data = self::liftLegacyButtonNextAction($class, $data);
 
         $docComment = $constructor->getDocComment() ?: '';
         $arguments = [];
@@ -333,7 +335,7 @@ final class Hydrator
      * @param array<string, mixed> $data
      * @return array<string, mixed>
      */
-    private static function liftLegacyButtonAction(string $class, array $data): array
+    private static function liftLegacyButtonNextAction(string $class, array $data): array
     {
         $classesWithButtons = [
             \Elqora\Dgp\Runtime\Plan::class => true,

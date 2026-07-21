@@ -4,6 +4,7 @@ namespace Elqora\Dgp\Charges;
 
 use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\ActionValidator;
 use Elqora\Dgp\Money\Money;
 use Elqora\Dgp\Support\Arrayable;
 use InvalidArgumentException;
@@ -14,7 +15,7 @@ final readonly class Charge implements Arrayable, JsonSerializable
     /**
      * @param list<ChargePayment> $payments
      * @param array<string, mixed> $meta
-     * @param list<ActionButton> $buttons
+     * @param list<\Elqora\Dgp\Actions\ActionButton> $buttons
      */
     public function __construct(
         public string|int|null $id,
@@ -32,6 +33,12 @@ final readonly class Charge implements Arrayable, JsonSerializable
         public array $meta = [],
         public array $buttons = [],
     ) {
+        $errors = ActionValidator::validateButtons($buttons);
+
+        if ($errors !== []) {
+            throw new InvalidArgumentException(reset($errors));
+        }
+
         if (str_starts_with($amount->amount->value, '-')) {
             $allowNegative = $meta['allow_negative'] ?? false;
             if (!$allowNegative) {

@@ -2,13 +2,15 @@
 
 namespace Elqora\Dgp\Deliveries;
 
-use InvalidArgumentException;
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\ActionButton;
+use InvalidArgumentException;
 
 final readonly class FulfillmentDelivery extends Delivery
 {
     /**
      * @param array<string, mixed> $meta
+     * @param list<\Elqora\Dgp\Actions\ActionButton> $buttons
      */
     public function __construct(
         string|int|null $id,
@@ -24,6 +26,7 @@ final readonly class FulfillmentDelivery extends Delivery
         ?string $name = null,
         bool $isPublic = true,
         ?string $note = null,
+        array $buttons = [],
     ) {
         if ($planId !== null) {
             throw new InvalidArgumentException('FulfillmentDelivery cannot have a planId.');
@@ -44,6 +47,7 @@ final readonly class FulfillmentDelivery extends Delivery
             name: $name,
             isPublic: $isPublic,
             note: $note,
+            buttons: $buttons,
         );
     }
 }

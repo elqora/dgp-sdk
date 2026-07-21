@@ -2,6 +2,7 @@
 
 namespace Elqora\Dgp\Actions;
 
+use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Support\Arrayable;
 use InvalidArgumentException;
 use JsonSerializable;
@@ -13,7 +14,7 @@ final readonly class ActionButton implements Arrayable, JsonSerializable
      */
     public function __construct(
         public string $value,
-        public ActionButtonKind $kind,
+        public ActionButtonKind $kind = ActionButtonKind::TEXT,
         public ?string $label = null,
         public ?string $icon = null,
         public ActionButtonStyle $style = ActionButtonStyle::DEFAULT,
@@ -21,6 +22,7 @@ final readonly class ActionButton implements Arrayable, JsonSerializable
         public ?bool $disabled = null,
         public ?string $disabledReason = null,
         public ?array $meta = null,
+        public ?NextAction $nextAction = null,
     ) {
         $errors = ActionValidator::validateButton($this);
 
@@ -44,6 +46,7 @@ final readonly class ActionButton implements Arrayable, JsonSerializable
             'disabled' => $this->disabled,
             'disabled_reason' => $this->disabledReason,
             'meta' => $this->meta,
+            'next_action' => $this->nextAction?->toArray(),
         ];
     }
 

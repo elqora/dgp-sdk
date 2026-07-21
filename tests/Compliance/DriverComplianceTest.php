@@ -52,7 +52,6 @@ use Elqora\Dgp\Actions\ActionButtonKind;
 use Elqora\Dgp\Actions\ActionButtonStyle;
 use Elqora\Dgp\Actions\ActionTarget;
 use Elqora\Dgp\Actions\ActionTargetType;
-use Elqora\Dgp\Actions\ButtonAction;
 use Elqora\Dgp\Actions\Contracts\GenericActionContract;
 use Elqora\Dgp\Actions\GenericActionRequest;
 use Elqora\Dgp\Actions\RedirectAction;
@@ -1018,37 +1017,104 @@ class DriverComplianceTest extends TestCase
         $this->assertTrue($handler->refreshBulk(new RefreshBulkRequest('smm-test', $targets))->isSuccess());
     }
 
-    public function testButtonActionRepresentsValidatedButtonGroup(): void
+    public function testActionButtonsRoundTripOnRuntimeObjects(): void
     {
-        $action = new ButtonAction(
-            buttons: [
-                new ActionButton(
-                    value: 'cancel',
-                    kind: ActionButtonKind::TEXT,
-                    label: 'Cancel',
-                    style: ActionButtonStyle::DANGER
-                ),
-                new ActionButton(
-                    value: 'refresh',
-                    kind: ActionButtonKind::ICON,
-                    icon: 'refresh-cw',
-                    tooltip: 'Refresh'
-                ),
-            ],
-            label: 'Available actions'
+        $buttons = [
+            new ActionButton(
+                value: 'cancel',
+                label: 'Cancel',
+                style: ActionButtonStyle::DANGER
+            ),
+            new ActionButton(
+                value: 'refresh',
+                kind: ActionButtonKind::ICON,
+                icon: 'refresh-cw',
+                tooltip: 'Refresh'
+            ),
+        ];
+
+        $plan = new Plan(
+            id: null,
+            key: 'plan-actions',
+            state: [],
+            buttons: $buttons
         );
+        $planPayload = Hydrator::serialize($plan);
+        $this->assertCount(2, $planPayload['buttons']);
+        $this->assertEquals('text', $planPayload['buttons'][0]['kind']);
+        $this->assertEquals('icon', $planPayload['buttons'][1]['kind']);
+        $this->assertTrue(Hydrator::compare($plan, Hydrator::hydrate(Plan::class, $planPayload)));
 
-        $serialized = Hydrator::serialize($action);
-        $this->assertEquals('button', $serialized['type']);
-        $this->assertCount(2, $serialized['buttons']);
-        $this->assertEquals('text', $serialized['buttons'][0]['kind']);
-        $this->assertEquals('icon', $serialized['buttons'][1]['kind']);
+        $preparation = new PreparationResult(
+            planId: 41,
+            status: PreparationStatus::RUNNING,
+            buttons: $buttons
+        );
+        $this->assertTrue(Hydrator::compare($preparation, Hydrator::hydrate(PreparationResult::class, $preparation->toArray())));
 
-        $hydrated = Hydrator::hydrate(ButtonAction::class, $serialized);
-        $this->assertTrue(Hydrator::compare($action, $hydrated));
+        $start = new StartResult(
+            id: null,
+            key: 'start-actions',
+            state: [],
+            buttons: $buttons
+        );
+        $this->assertTrue(Hydrator::compare($start, Hydrator::hydrate(StartResult::class, $start->toArray())));
+
+        $initialization = new InitializationDelivery(
+            id: null,
+            key: 'init-actions',
+            status: DeliveryStatus::PENDING,
+            label: 'Initialize',
+            buttons: $buttons
+        );
+        $this->assertTrue(Hydrator::compare($initialization, Hydrator::hydrate(InitializationDelivery::class, $initialization->toArray())));
+
+        $fulfillment = new FulfillmentDelivery(
+            id: null,
+            key: 'fulfill-actions',
+            status: DeliveryStatus::PENDING,
+            label: 'Fulfill',
+            buttons: [
+                new ActionButton(value: 'retry', label: 'Retry'),
+            ]
+        );
+        $this->assertTrue(Hydrator::compare($fulfillment, Hydrator::hydrate(FulfillmentDelivery::class, $fulfillment->toArray())));
+
+        $charge = new Charge(
+            id: null,
+            key: 'charge-actions',
+            target: new ChargeTarget(ChargeTargetType::PLAN, key: 'plan-actions'),
+            label: 'Payment',
+            amount: new Money(new Amount('10.00'), new Currency('USD')),
+            status: ChargeStatus::PENDING,
+            buttons: $buttons
+        );
+        $this->assertTrue(Hydrator::compare($charge, Hydrator::hydrate(Charge::class, $charge->toArray())));
     }
 
-    public function testButtonActionRejectsInvalidButtonPayloads(): void
+    public function testActionButtonSupportsNestedNextActionWithReservedValue(): void
+    {
+        $redirect = new RedirectAction(
+            url: 'https://gateway.example/pay',
+            external: true,
+            label: 'Open payment'
+        );
+
+        $button = new ActionButton(
+            value: 'action',
+            label: 'Open payment',
+            nextAction: $redirect
+        );
+
+        $serialized = Hydrator::serialize($button);
+        $this->assertEquals('redirect', $serialized['next_action']['type']);
+
+        $hydrated = Hydrator::hydrate(ActionButton::class, $serialized);
+        $this->assertInstanceOf(RedirectAction::class, $hydrated->nextAction);
+        $this->assertTrue(Hydrator::compare($button, $hydrated));
+    }
+
+    public function testActionButtonsRejectInvalidPayloads(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Text buttons require a label.');
@@ -1057,6 +1123,86 @@ class DriverComplianceTest extends TestCase
             value: 'approve',
             kind: ActionButtonKind::TEXT
         );
+    }
+
+    public function testActionButtonRejectsNextActionWithoutReservedValue(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Buttons with a next action must use value "action".');
+
+        new ActionButton(
+            value: 'pay',
+            label: 'Pay',
+            nextAction: new RedirectAction(url: 'https://gateway.example/pay')
+        );
+    }
+
+    public function testActionButtonRejectsReservedValueWithoutNextAction(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Button value "action" requires a next action.');
+
+        new ActionButton(
+            value: 'action',
+            label: 'Open payment'
+        );
+    }
+
+    public function testLegacyButtonNextActionPayloadHydratesToParentButtons(): void
+    {
+        $hydrated = Hydrator::hydrate(Plan::class, [
+            'id' => null,
+            'key' => 'legacy-plan',
+            'state' => [],
+            'next_action' => [
+                'type' => 'button',
+                'label' => 'Available actions',
+                'buttons' => [
+                    [
+                        'value' => 'approve',
+                        'kind' => 'text',
+                        'label' => 'Approve',
+                        'style' => 'primary',
+                    ],
+                ],
+                'meta' => [],
+            ],
+        ]);
+
+        $this->assertNull($hydrated->nextAction);
+        $this->assertCount(1, $hydrated->buttons);
+        $this->assertInstanceOf(ActionButton::class, $hydrated->buttons[0]);
+        $this->assertEquals('approve', $hydrated->buttons[0]->value);
+    }
+
+    public function testLegacyButtonNextActionPayloadDoesNotOverrideTopLevelButtons(): void
+    {
+        $hydrated = Hydrator::hydrate(Plan::class, [
+            'id' => null,
+            'key' => 'legacy-plan',
+            'state' => [],
+            'buttons' => [
+                [
+                    'value' => 'retry',
+                    'kind' => 'text',
+                    'label' => 'Retry',
+                ],
+            ],
+            'next_action' => [
+                'type' => 'button',
+                'buttons' => [
+                    [
+                        'value' => 'approve',
+                        'kind' => 'text',
+                        'label' => 'Approve',
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertNull($hydrated->nextAction);
+        $this->assertCount(1, $hydrated->buttons);
+        $this->assertEquals('retry', $hydrated->buttons[0]->value);
     }
 
     public function testChargePaymentHistoryRoundTrip(): void

@@ -37,6 +37,7 @@ use Elqora\Dgp\Deliveries\DeliveryProgressSegment;
 use Elqora\Dgp\Deliveries\DeliveryStage;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Progress\DeliveryProgressRecord;
 use Elqora\Dgp\Progress\ProgressSource;
@@ -223,14 +224,24 @@ class RepositoryComplianceTest extends TestCase
                     progress: null,
                     planId: null,
                     startId: null,
-                    nextAction: $redirectAction
+                    nextAction: $redirectAction,
+                    buttons: [
+                        new ActionButton(value: 'approve', label: 'Approve'),
+                    ]
                 )
+            ],
+            buttons: [
+                new ActionButton(value: 'cancel', label: 'Cancel'),
             ]
         );
 
         $savedPlan = $runtimeRepository->seedPlan($handler, 123, $plan)->value();
         $this->assertNotNull($savedPlan);
+        $this->assertCount(1, $savedPlan->buttons);
+        $this->assertEquals('cancel', $savedPlan->buttons[0]->value);
         $this->assertCount(1, $savedPlan->deliveries);
+        $this->assertCount(1, $savedPlan->deliveries[0]->buttons);
+        $this->assertEquals('approve', $savedPlan->deliveries[0]->buttons[0]->value);
         $this->assertNotNull($savedPlan->deliveries[0]->nextAction);
         $action1 = $savedPlan->deliveries[0]->nextAction;
         $this->assertInstanceOf(RedirectAction::class, $action1);
@@ -239,6 +250,8 @@ class RepositoryComplianceTest extends TestCase
         // 2. Fetch deliveries from repo
         $fetched = $repo->deliveriesForPlan(123, new PlanReference(id: $savedPlan->id))->value();
         $this->assertCount(1, $fetched);
+        $this->assertCount(1, $fetched[0]->buttons);
+        $this->assertEquals('approve', $fetched[0]->buttons[0]->value);
         $this->assertNotNull($fetched[0]->nextAction);
         $action2 = $fetched[0]->nextAction;
         $this->assertInstanceOf(RedirectAction::class, $action2);
@@ -252,16 +265,19 @@ class RepositoryComplianceTest extends TestCase
             progress: null,
             planId: $savedPlan->id,
             startId: null,
-            nextAction: null // Clear nextAction
+            nextAction: null, // Clear nextAction
+            buttons: $fetched[0]->buttons
         );
 
         $updatedList = $runtimeRepository->seedDeliveries($handler, 123, [$deliveryUpdate])->value();
         $this->assertCount(1, $updatedList);
         $this->assertNull($updatedList[0]->nextAction);
+        $this->assertCount(1, $updatedList[0]->buttons);
 
         // Fetch again to verify cleared in repo store
         $fetchedUpdated = $repo->deliveriesForPlan(123, new PlanReference(id: $savedPlan->id))->value();
         $this->assertNull($fetchedUpdated[0]->nextAction);
+        $this->assertCount(1, $fetchedUpdated[0]->buttons);
     }
 
     public function testRuntimeRepositoryDoesNotExposeServiceStorageOrInsightHooks(): void

@@ -62,6 +62,14 @@ final class ActionValidator
             $errors['disabled_reason'] = 'Disabled reason requires disabled=true.';
         }
 
+        if ($button->nextAction !== null && $button->value !== 'action') {
+            $errors['next_action'] = 'Buttons with a next action must use value "action".';
+        }
+
+        if ($button->value === 'action' && $button->nextAction === null) {
+            $errors['next_action'] = 'Button value "action" requires a next action.';
+        }
+
         return $errors;
     }
 }

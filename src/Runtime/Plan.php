@@ -2,9 +2,12 @@
 
 namespace Elqora\Dgp\Runtime;
 
-use Elqora\Dgp\Support\Arrayable;
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\ActionValidator;
+use Elqora\Dgp\Support\Arrayable;
 use Elqora\Dgp\Runtime\PlanStatus;
+use InvalidArgumentException;
 use JsonSerializable;
 
 final readonly class Plan implements Arrayable, JsonSerializable
@@ -13,6 +16,7 @@ final readonly class Plan implements Arrayable, JsonSerializable
      * @param array<string, mixed> $state
      * @param list<\Elqora\Dgp\Deliveries\InitializationDelivery> $deliveries
      * @param array<string, mixed> $meta
+     * @param list<\Elqora\Dgp\Actions\ActionButton> $buttons
      */
     public function __construct(
         public string|int|null $id,
@@ -24,7 +28,14 @@ final readonly class Plan implements Arrayable, JsonSerializable
         public int $revision = 0,
         public string|int|null $orderId = null,
         public PlanStatus $status = PlanStatus::ACTIVE,
-    ) {}
+        public array $buttons = [],
+    ) {
+        $errors = ActionValidator::validateButtons($buttons);
+
+        if ($errors !== []) {
+            throw new InvalidArgumentException(reset($errors));
+        }
+    }
 
     /**
      * @return array<string, mixed>
@@ -37,6 +48,7 @@ final readonly class Plan implements Arrayable, JsonSerializable
             'state' => $this->state,
             'status' => $this->status->value,
             'deliveries' => array_map(fn ($d) => $d->toArray(), $this->deliveries),
+            'buttons' => array_map(fn (ActionButton $button) => $button->toArray(), $this->buttons),
             'next_action' => $this->nextAction?->toArray(),
             'meta' => $this->meta,
             'revision' => $this->revision,

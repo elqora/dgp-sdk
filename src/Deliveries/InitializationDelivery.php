@@ -2,13 +2,15 @@
 
 namespace Elqora\Dgp\Deliveries;
 
-use InvalidArgumentException;
 use Elqora\Dgp\Actions\Contracts\NextAction;
+use Elqora\Dgp\Actions\ActionButton;
+use InvalidArgumentException;
 
 final readonly class InitializationDelivery extends Delivery
 {
     /**
      * @param array<string, mixed> $meta
+     * @param list<\Elqora\Dgp\Actions\ActionButton> $buttons
      */
     public function __construct(
         string|int|null $id,
@@ -24,6 +26,7 @@ final readonly class InitializationDelivery extends Delivery
         ?string $name = null,
         bool $isPublic = true,
         ?string $note = null,
+        array $buttons = [],
     ) {
         if ($startId !== null) {
             throw new InvalidArgumentException('InitializationDelivery cannot have a startId.');
@@ -44,6 +47,7 @@ final readonly class InitializationDelivery extends Delivery
             name: $name,
             isPublic: $isPublic,
             note: $note,
+            buttons: $buttons,
         );
     }
 }

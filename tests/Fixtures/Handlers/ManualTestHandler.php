@@ -178,6 +178,7 @@ class ManualTestHandler implements DgpDriverContract, ServiceSchemaCatalogContra
                 name: $delivery->name,
                 isPublic: $delivery->isPublic,
                 note: $delivery->note,
+                buttons: $delivery->buttons,
             ),
             $request->plan->deliveries
         );

@@ -244,6 +244,7 @@ $custom = Dgp::path('smm-test', 'custom/action');
 Handlers guide user or host next steps through `NextAction` DTOs.
 
 ```php
+use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Runtime\Plan;
 
@@ -251,6 +252,21 @@ $plan = new Plan(
     id: null,
     key: 'plan-payment',
     state: ['pending_payment' => true],
+    buttons: [
+        new ActionButton(
+            value: 'approve',
+            label: 'Approve',
+        ),
+        new ActionButton(
+            value: 'action',
+            label: 'Complete Invoice Payment',
+            nextAction: new RedirectAction(
+                url: 'https://gateway.example/pay/invoice-88',
+                external: true,
+                label: 'Complete Invoice Payment',
+            ),
+        ),
+    ],
     nextAction: new RedirectAction(
         url: 'https://gateway.example/pay/invoice-88',
         external: true,
@@ -262,40 +278,65 @@ $plan = new Plan(
 Built-in next actions include:
 
 - `RedirectAction`
-- `ButtonAction`
-- `FieldsAction`
 - `PopupAction`
 - `PopoverAction`
 - `InlineAction`
 - `InstructionsAction`
 - `QrCodeAction`
-- `TextAction`
 - `CustomAction`
 
-`ButtonAction` represents a validated group of buttons.
+Buttons are independent controls exposed on runtime DTOs separately from `nextAction`.
 
 ```php
 use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\ActionButtonKind;
 use Elqora\Dgp\Actions\ActionButtonStyle;
-use Elqora\Dgp\Actions\ButtonAction;
 
-$action = new ButtonAction(
+$buttons = [
+    new ActionButton(
+        value: 'cancel',
+        label: 'Cancel',
+        style: ActionButtonStyle::DANGER,
+    ),
+    new ActionButton(
+        value: 'refresh',
+        kind: ActionButtonKind::ICON,
+        icon: 'refresh-cw',
+        tooltip: 'Refresh',
+    ),
+];
+```
+
+Use the reserved value `action` when a button should execute its attached `NextAction` instead of submitting a handler-defined button value.
+
+```php
+use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\RedirectAction;
+
+$button = new ActionButton(
+    value: 'action',
+    label: 'Open payment',
+    nextAction: new RedirectAction(
+        url: 'https://gateway.example/pay/invoice-88',
+    ),
+);
+```
+
+Runtime DTOs that expose `nextAction` also expose top-level buttons.
+
+```php
+use Elqora\Dgp\Runtime\StartResult;
+
+$start = new StartResult(
+    id: null,
+    key: 'start-payment',
+    state: [],
     buttons: [
         new ActionButton(
-            value: 'cancel',
-            kind: ActionButtonKind::TEXT,
-            label: 'Cancel',
-            style: ActionButtonStyle::DANGER,
-        ),
-        new ActionButton(
-            value: 'refresh',
-            kind: ActionButtonKind::ICON,
-            icon: 'refresh-cw',
-            tooltip: 'Refresh',
+            value: 'retry',
+            label: 'Retry',
         ),
     ],
-    label: 'Available actions',
 );
 ```
 

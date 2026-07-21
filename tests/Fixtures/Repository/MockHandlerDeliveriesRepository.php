@@ -174,6 +174,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $delivery->name,
                 isPublic: $delivery->isPublic,
                 note: $delivery->note,
+                buttons: $delivery->buttons,
             );
         } else {
             $persistedDel = new FulfillmentDelivery(
@@ -189,6 +190,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $delivery->name,
                 isPublic: $delivery->isPublic,
                 note: $delivery->note,
+                buttons: $delivery->buttons,
             );
         }
 
@@ -293,11 +295,12 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 nextAction: $del->nextAction,
                 meta: $del->meta,
                 kind: $del->kind,
-                name: $del->name,
-                isPublic: $del->isPublic,
-                note: $del->note,
-            );
-        } else {
+                    name: $del->name,
+                    isPublic: $del->isPublic,
+                    note: $del->note,
+                    buttons: $del->buttons,
+                );
+            } else {
             $updatedDel = new FulfillmentDelivery(
                 id: $del->id,
                 key: $del->key,
@@ -308,11 +311,12 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 nextAction: $del->nextAction,
                 meta: $del->meta,
                 kind: $del->kind,
-                name: $del->name,
-                isPublic: $del->isPublic,
-                note: $del->note,
-            );
-        }
+                    name: $del->name,
+                    isPublic: $del->isPublic,
+                    note: $del->note,
+                    buttons: $del->buttons,
+                );
+            }
 
         $foundRecord['delivery'] = $updatedDel;
         $this->store['deliveries'][$foundIndex] = $foundRecord;
@@ -388,6 +392,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         } else {
             $updatedDel = new FulfillmentDelivery(
@@ -403,6 +408,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         }
 
@@ -462,6 +468,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         } else {
             $updatedDel = new FulfillmentDelivery(
@@ -477,6 +484,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         }
 
@@ -579,6 +587,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         } else {
             $updatedDel = new FulfillmentDelivery(
@@ -594,6 +603,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         }
 
@@ -696,6 +706,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         } else {
             $updatedDel = new FulfillmentDelivery(
@@ -711,6 +722,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
                 name: $del->name,
                 isPublic: $del->isPublic,
                 note: $del->note,
+                buttons: $del->buttons,
             );
         }
 
