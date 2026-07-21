@@ -8,6 +8,6 @@ final readonly class ChargeStateRequest
         public string|int $orderId,
         public string|int|null $chargeId = null,
         public ?string $chargeKey = null,
-        public ?string $deliveryKey = null,
+        public ?ChargeTarget $target = null,
     ) {}
 }

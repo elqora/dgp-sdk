@@ -228,10 +228,12 @@ Dgp::endpointPrefix('/dgp');
 
 $deliveryAction = Dgp::endpoint('smm-test', HostEndpointType::DELIVERY_ACTION);
 $genericAction = Dgp::endpoint('smm-test', HostEndpointType::GENERIC_ACTION);
+$chargePayment = Dgp::endpoint('smm-test', HostEndpointType::CHARGE_PAYMENT);
 $privateAsset = Dgp::endpoint('smm-test', HostEndpointType::PRIVATE_ASSET, 'invoice.pdf');
 
 echo $deliveryAction->path; // /dgp/smm-test/delivery/action
 echo $genericAction->path;  // /dgp/smm-test/generic/action
+echo $chargePayment->path;  // /dgp/smm-test/charge/payment
 echo $privateAsset->path;   // /dgp/smm-test/assets/invoice.pdf
 
 $custom = Dgp::path('smm-test', 'custom/action');
@@ -471,13 +473,16 @@ $custom = new DgpEvent(
 
 ## Charges And Payments
 
-`Charge` carries the money item, summary payment totals, and optional payment history.
+`Charge` carries the money item, current payment projections, and immutable payment history. Aggregate values such as `paidAmount` and `balanceDue` are useful for presentation and filtering, but hosts should keep `ChargePayment` records for audit trails, partial payment inspection, refunds, and accounting reconciliation.
 
 ```php
 use Elqora\Dgp\Charges\Charge;
+use Elqora\Dgp\Charges\ChargePaymentNotification;
 use Elqora\Dgp\Charges\ChargePayment;
 use Elqora\Dgp\Charges\ChargePaymentStatus;
 use Elqora\Dgp\Charges\ChargeStatus;
+use Elqora\Dgp\Charges\ChargeTarget;
+use Elqora\Dgp\Charges\ChargeTargetType;
 use Elqora\Dgp\Money\Amount;
 use Elqora\Dgp\Money\Currency;
 use Elqora\Dgp\Money\Money;
@@ -494,13 +499,76 @@ $payment = new ChargePayment(
 $charge = new Charge(
     id: null,
     key: 'deposit',
-    deliveryKey: 'init-review',
+    target: new ChargeTarget(ChargeTargetType::PLAN, key: 'plan-payment'),
     label: 'Deposit',
     amount: new Money(new Amount('100.00'), new Currency('USD')),
     status: ChargeStatus::PARTIALLY_PAID,
     paidAmount: new Money(new Amount('25.00'), new Currency('USD')),
     balanceDue: new Money(new Amount('75.00'), new Currency('USD')),
     payments: [$payment],
+);
+```
+
+Charges are owned by workflow targets, not by deliveries alone. Built-in target types cover plans, segments, and deliveries, and custom string types can represent future workflow objects without changing the `Charge` contract.
+
+```php
+$planCharge = new Charge(
+    id: null,
+    key: 'setup-fee',
+    target: new ChargeTarget(ChargeTargetType::PLAN, key: 'plan-payment'),
+    label: 'Setup Fee',
+    amount: new Money(new Amount('100.00'), new Currency('USD')),
+    status: ChargeStatus::PENDING,
+);
+
+$segmentCharge = new Charge(
+    id: null,
+    key: 'approval-fee',
+    target: new ChargeTarget(
+        type: ChargeTargetType::SEGMENT,
+        key: 'approval',
+        parent: new ChargeTarget(ChargeTargetType::DELIVERY, key: 'fulfillment'),
+    ),
+    label: 'Approval Fee',
+    amount: new Money(new Amount('25.00'), new Currency('USD')),
+    status: ChargeStatus::PENDING,
+);
+
+$futureCharge = new Charge(
+    id: null,
+    key: 'checkpoint-fee',
+    target: new ChargeTarget('workflow.custom_checkpoint', key: 'checkpoint-1'),
+    label: 'Checkpoint Fee',
+    amount: new Money(new Amount('15.00'), new Currency('USD')),
+    status: ChargeStatus::PENDING,
+);
+```
+
+The charge lifecycle is bidirectional:
+
+1. The handler creates or updates a `Charge` through `ChargeUpdateHookContract`.
+2. The host persists and presents the charge to the client.
+3. The client pays through host-owned checkout or wallet flows.
+4. The host records the immutable `ChargePayment`.
+5. The host notifies the handler with `ChargePaymentNotificationContract`.
+6. The handler progresses its workflow and may emit updated charges, deliveries, plans, next actions, or management state.
+
+The handler owns pricing logic, charge requirements, and workflow progression. The host owns payment gateways, client interaction, payment collection, and payment persistence. `ChargeStateResolverContract` remains available for reconciliation and recovery, but normal workflow progression should use payment notifications instead of polling.
+
+`ChargeTarget` identifies what the charge belongs to. `ChargePaymentNotification` still identifies the order, charge, and payment, and may include `chargeTarget` when the host wants to echo the ownership context back to the handler.
+
+```php
+$notification = new ChargePaymentNotification(
+    orderId: 12345,
+    chargeKey: 'deposit',
+    paymentKey: 'payment-1',
+    amount: new Money(new Amount('25.00'), new Currency('USD')),
+    status: ChargePaymentStatus::PAID,
+    occurredAt: '2026-07-09T10:00:01Z',
+    paidAt: '2026-07-09T10:00:00Z',
+    resultingChargeStatus: ChargeStatus::PARTIALLY_PAID,
+    chargeTarget: new ChargeTarget(ChargeTargetType::PLAN, key: 'plan-payment'),
+    meta: ['gateway' => 'internal'],
 );
 ```
 
@@ -547,10 +615,10 @@ $analysis = new Analysis('delivery.throughput', $chart);
 
 ## Hooks & Event Ports
 
-The DGP SDK specifies interfaces for asynchronous update hooks and event dispatching. These hooks act as outbound ports allowing handlers/drivers to notify the host platform of asynchronous changes (such as webhook updates or billing invoice transitions).
+The DGP SDK specifies interfaces for asynchronous update hooks, payment notifications, and event dispatching. Charge updates flow from handler to host; payment notifications flow from host to handler after the host records payment state changes.
 
 ### 1. Charge Update Hook
-Used by drivers to push asynchronous billing transitions (e.g. charge creation, payment authorization, success, or failure events) back to the host platform:
+Used by handlers/drivers to push charge requirements and charge state changes to the host platform. This remains the handler-to-host synchronization path for charge creation, amount changes, status changes, next actions, and metadata:
 ```php
 use Elqora\Dgp\Charges\Contracts\ChargeUpdateHookContract;
 use Elqora\Dgp\Charges\ChargeUpdateRequest;
@@ -560,13 +628,47 @@ class MyChargeUpdateHook implements ChargeUpdateHookContract
 {
     public function update(ChargeUpdateRequest $request): Result
     {
-        // Host-side billing transition logic...
+        // Host-side charge persistence and presentation logic...
         return Result::success(null);
     }
 }
 ```
 
-### 3. Event Hook
+### 2. Charge Payment Notification
+Used by hosts to notify handlers that a payment state change has been recorded. This is an opt-in handler contract and does not replace `ChargeUpdateHookContract`:
+```php
+use Elqora\Dgp\Charges\Contracts\ChargePaymentNotificationContract;
+use Elqora\Dgp\Charges\ChargePaymentNotification;
+use Elqora\Dgp\Errors\Result;
+
+class MyHandlerPaymentNotifications implements ChargePaymentNotificationContract
+{
+    public function notifyPayment(ChargePaymentNotification $notification): Result
+    {
+        // Handler-side workflow progression after host-recorded payment...
+        return Result::success(null);
+    }
+}
+```
+
+### 3. Charge State Resolver
+Used for reconciliation and recovery when the host or handler needs to resolve current charge and payment state. It should not be the normal mechanism for discovering that payment happened:
+```php
+use Elqora\Dgp\Charges\Contracts\ChargeStateResolverContract;
+use Elqora\Dgp\Charges\ChargeStateRequest;
+use Elqora\Dgp\Errors\Result;
+
+class MyChargeStateResolver implements ChargeStateResolverContract
+{
+    public function resolve(ChargeStateRequest $request): Result
+    {
+        // Resolve current charge and payment state for recovery...
+        return Result::success(null);
+    }
+}
+```
+
+### 4. Event Hook
 A general, neutral channel for dispatching event telemetry (such as status updates or logs) from the driver to the host:
 ```php
 use Elqora\Dgp\Events\Contracts\EventHookContract;
@@ -581,7 +683,7 @@ class MyEventHook implements EventHookContract
 }
 ```
 
-### 4. Webhook Receiver Contract
+### 5. Webhook Receiver Contract
 Unlike the outbound hooks above, `WebhookContract` is an inbound port implemented by the handler to parse and verify incoming HTTP notifications sent by the external provider:
 ```php
 use Elqora\Dgp\Events\Contracts\WebhookContract;

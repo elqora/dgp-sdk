@@ -4,6 +4,7 @@ namespace Elqora\Dgp\Support;
 
 use ReflectionClass;
 use ReflectionNamedType;
+use ReflectionUnionType;
 use InvalidArgumentException;
 
 final class Hydrator
@@ -88,6 +89,8 @@ final class Hydrator
             throw new InvalidArgumentException("Data for class {$class} must be an array or map to a single constructor parameter.");
         }
 
+        $data = self::liftLegacyButtonAction($class, $data);
+
         $docComment = $constructor->getDocComment() ?: '';
         $arguments = [];
 
@@ -120,6 +123,19 @@ final class Hydrator
             }
 
             $type = $parameter->getType();
+            if ($type instanceof ReflectionUnionType && $class === \Elqora\Dgp\Charges\ChargeTarget::class && $name === 'type') {
+                if ($value === null && $parameter->allowsNull()) {
+                    $arguments[] = null;
+                    continue;
+                }
+
+                $hydratedUnionValue = self::hydrateUnionValue($type, $value);
+                if ($hydratedUnionValue !== null) {
+                    $arguments[] = $hydratedUnionValue;
+                    continue;
+                }
+            }
+
             if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
                 /** @var class-string<object> $typeName */
                 $typeName = $type->getName();
@@ -222,6 +238,27 @@ final class Hydrator
         return $value;
     }
 
+    private static function hydrateUnionValue(ReflectionUnionType $type, mixed $value): mixed
+    {
+        foreach ($type->getTypes() as $unionType) {
+            if (!$unionType instanceof ReflectionNamedType || $unionType->isBuiltin()) {
+                continue;
+            }
+
+            /** @var class-string<object> $typeName */
+            $typeName = $unionType->getName();
+            if (is_subclass_of($typeName, \BackedEnum::class)) {
+                try {
+                    return $typeName::from($value);
+                } catch (\ValueError) {
+                    continue;
+                }
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @param class-string<object> $declaringClass
      */
@@ -282,15 +319,46 @@ final class Hydrator
         $map = [
             'redirect' => \Elqora\Dgp\Actions\RedirectAction::class,
             'custom' => \Elqora\Dgp\Actions\CustomAction::class,
-            'fields' => \Elqora\Dgp\Actions\FieldsAction::class,
             'inline' => \Elqora\Dgp\Actions\InlineAction::class,
             'instructions' => \Elqora\Dgp\Actions\InstructionsAction::class,
             'popover' => \Elqora\Dgp\Actions\PopoverAction::class,
             'popup' => \Elqora\Dgp\Actions\PopupAction::class,
             'qr_code' => \Elqora\Dgp\Actions\QrCodeAction::class,
-            'text' => \Elqora\Dgp\Actions\TextAction::class,
-            'button' => \Elqora\Dgp\Actions\ButtonAction::class,
         ];
         return $map[$type] ?? null;
+    }
+
+    /**
+     * @param class-string<object> $class
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private static function liftLegacyButtonAction(string $class, array $data): array
+    {
+        $classesWithButtons = [
+            \Elqora\Dgp\Runtime\Plan::class => true,
+            \Elqora\Dgp\Runtime\PreparationResult::class => true,
+            \Elqora\Dgp\Runtime\StartResult::class => true,
+            \Elqora\Dgp\Deliveries\InitializationDelivery::class => true,
+            \Elqora\Dgp\Deliveries\FulfillmentDelivery::class => true,
+            \Elqora\Dgp\Charges\Charge::class => true,
+        ];
+
+        if (!isset($classesWithButtons[$class])) {
+            return $data;
+        }
+
+        $nextAction = $data['next_action'] ?? $data['nextAction'] ?? null;
+        if (!is_array($nextAction) || ($nextAction['type'] ?? null) !== 'button') {
+            return $data;
+        }
+
+        if (!array_key_exists('buttons', $data) && isset($nextAction['buttons']) && is_array($nextAction['buttons'])) {
+            $data['buttons'] = $nextAction['buttons'];
+        }
+
+        unset($data['next_action'], $data['nextAction']);
+
+        return $data;
     }
 }

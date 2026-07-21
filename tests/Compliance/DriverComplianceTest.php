@@ -20,6 +20,7 @@ use Elqora\Dgp\Insights\ScoreboardItem;
 use Elqora\Dgp\Manifest\AnalysisDefinition;
 use Elqora\Dgp\Tests\Fixtures\Handlers\SmmTestHandler;
 use Elqora\Dgp\Tests\Fixtures\Handlers\ManualTestHandler;
+use Elqora\Dgp\Tests\Fixtures\Handlers\PaymentNotificationTestHandler;
 use Elqora\Dgp\Manifest\Capability;
 use Elqora\Dgp\Manifest\HandlerManifest;
 use Elqora\Dgp\Manifest\ScoreboardItemDefinition;
@@ -61,6 +62,11 @@ use Elqora\Dgp\Bulk\RefreshBulkRequest;
 use Elqora\Dgp\Bulk\RetryBulkRequest;
 use Elqora\Dgp\Bulk\StartBulkRequest;
 use Elqora\Dgp\Charges\Charge;
+use Elqora\Dgp\Charges\ChargeStateRequest;
+use Elqora\Dgp\Charges\ChargeStatusView;
+use Elqora\Dgp\Charges\ChargeTarget;
+use Elqora\Dgp\Charges\ChargeTargetType;
+use Elqora\Dgp\Charges\ChargePaymentNotification;
 use Elqora\Dgp\Charges\ChargePayment;
 use Elqora\Dgp\Charges\ChargePaymentStatus;
 use Elqora\Dgp\Charges\ChargeStatus;
@@ -549,6 +555,10 @@ class DriverComplianceTest extends TestCase
         $bulk = Dgp::endpoint('smm-test', HostEndpointType::BULK_ACTION);
         $this->assertSame(HostEndpointType::BULK_ACTION, $bulk->type);
         $this->assertEquals('/dgp/smm-test/bulk/action', $bulk->path);
+
+        $chargePayment = Dgp::endpoint('smm-test', HostEndpointType::CHARGE_PAYMENT);
+        $this->assertSame(HostEndpointType::CHARGE_PAYMENT, $chargePayment->type);
+        $this->assertEquals('/dgp/smm-test/charge/payment', $chargePayment->path);
 
         $asset = Dgp::endpoint('smm-test', HostEndpointType::PRIVATE_ASSET, 'invoice.pdf');
         $this->assertEquals('/dgp/smm-test/assets/invoice.pdf', $asset->path);
@@ -1064,7 +1074,7 @@ class DriverComplianceTest extends TestCase
         $charge = new Charge(
             id: null,
             key: 'deposit',
-            deliveryKey: 'init-review',
+            target: new ChargeTarget(ChargeTargetType::PLAN, key: 'plan-payment'),
             label: 'Deposit',
             amount: new Money(new Amount('100.00'), new Currency('USD')),
             status: ChargeStatus::PARTIALLY_PAID,
@@ -1077,10 +1087,169 @@ class DriverComplianceTest extends TestCase
         $this->assertCount(1, $serialized['payments']);
         $this->assertEquals('paid', $serialized['payments'][0]['status']);
         $this->assertEquals('txn-123', $serialized['payments'][0]['reference']);
+        $this->assertEquals('plan', $serialized['target']['type']);
+        $this->assertEquals('plan-payment', $serialized['target']['key']);
+        $this->assertArrayNotHasKey('delivery_key', $serialized);
 
         $hydrated = Hydrator::hydrate(Charge::class, $serialized);
         $this->assertTrue(Hydrator::compare($charge, $hydrated));
         $this->assertSame(ChargePaymentStatus::PAID, $hydrated->payments[0]->status);
+        $this->assertInstanceOf(ChargeTarget::class, $hydrated->target);
+        $this->assertSame(ChargeTargetType::PLAN, $hydrated->target->type);
+    }
+
+    public function testChargeTargetSupportsNestedAndCustomWorkflowOwnership(): void
+    {
+        $segmentTarget = new ChargeTarget(
+            type: ChargeTargetType::SEGMENT,
+            key: 'approval',
+            parent: new ChargeTarget(ChargeTargetType::DELIVERY, key: 'fulfillment'),
+            meta: ['phase' => 'preflight']
+        );
+
+        $segmentCharge = new Charge(
+            id: 7,
+            key: 'approval-fee',
+            target: $segmentTarget,
+            label: 'Approval Fee',
+            amount: new Money(new Amount('10.00'), new Currency('USD')),
+            status: ChargeStatus::PENDING
+        );
+
+        $customCharge = new Charge(
+            id: 8,
+            key: 'future-fee',
+            target: new ChargeTarget('workflow.custom_checkpoint', key: 'checkpoint-1'),
+            label: 'Future Fee',
+            amount: new Money(new Amount('15.00'), new Currency('USD')),
+            status: ChargeStatus::PENDING
+        );
+
+        $serializedSegment = Hydrator::serialize($segmentCharge);
+        $this->assertEquals('segment', $serializedSegment['target']['type']);
+        $this->assertEquals('delivery', $serializedSegment['target']['parent']['type']);
+        $this->assertEquals('fulfillment', $serializedSegment['target']['parent']['key']);
+        $this->assertEquals(['phase' => 'preflight'], $serializedSegment['target']['meta']);
+
+        $hydratedSegment = Hydrator::hydrate(Charge::class, $serializedSegment);
+        $this->assertTrue(Hydrator::compare($segmentCharge, $hydratedSegment));
+        $this->assertInstanceOf(ChargeTarget::class, $hydratedSegment->target);
+        $this->assertSame(ChargeTargetType::SEGMENT, $hydratedSegment->target->type);
+        $this->assertInstanceOf(ChargeTarget::class, $hydratedSegment->target->parent);
+        $this->assertSame(ChargeTargetType::DELIVERY, $hydratedSegment->target->parent->type);
+
+        $serializedCustom = Hydrator::serialize($customCharge);
+        $this->assertEquals('workflow.custom_checkpoint', $serializedCustom['target']['type']);
+        $hydratedCustom = Hydrator::hydrate(Charge::class, $serializedCustom);
+        $this->assertTrue(Hydrator::compare($customCharge, $hydratedCustom));
+        $this->assertInstanceOf(ChargeTarget::class, $hydratedCustom->target);
+        $this->assertSame('workflow.custom_checkpoint', $hydratedCustom->target->type);
+    }
+
+    public function testChargeTargetRequiresIdentity(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('A charge target ID or key is required.');
+
+        new ChargeTarget(ChargeTargetType::PLAN);
+    }
+
+    public function testChargeStateDtosCarryGenericTargets(): void
+    {
+        $target = new ChargeTarget(ChargeTargetType::DELIVERY, key: 'fulfillment');
+        $statusView = new ChargeStatusView(
+            id: 7,
+            key: 'fulfillment-fee',
+            status: ChargeStatus::PAID,
+            amount: new Money(new Amount('50.00'), new Currency('USD')),
+            paid: new Money(new Amount('50.00'), new Currency('USD')),
+            balanceDue: new Money(new Amount('0.00'), new Currency('USD')),
+            satisfied: true,
+            paidAt: '2026-07-09T10:00:00Z',
+            target: $target
+        );
+        $request = new ChargeStateRequest(
+            orderId: 12345,
+            chargeKey: 'fulfillment-fee',
+            target: $target
+        );
+
+        $serializedStatus = Hydrator::serialize($statusView);
+        $this->assertEquals('delivery', $serializedStatus['target']['type']);
+        $this->assertEquals('fulfillment', $serializedStatus['target']['key']);
+
+        $hydratedStatus = Hydrator::hydrate(ChargeStatusView::class, $serializedStatus);
+        $this->assertTrue(Hydrator::compare($statusView, $hydratedStatus));
+        $this->assertInstanceOf(ChargeTarget::class, $hydratedStatus->target);
+        $this->assertSame(ChargeTargetType::DELIVERY, $hydratedStatus->target->type);
+
+        $serializedRequest = Hydrator::serialize($request);
+        $this->assertEquals('delivery', $serializedRequest['target']['type']);
+        $this->assertArrayNotHasKey('delivery_key', $serializedRequest);
+
+        $hydratedRequest = Hydrator::hydrate(ChargeStateRequest::class, $serializedRequest);
+        $this->assertTrue(Hydrator::compare($request, $hydratedRequest));
+        $this->assertInstanceOf(ChargeTarget::class, $hydratedRequest->target);
+        $this->assertSame(ChargeTargetType::DELIVERY, $hydratedRequest->target->type);
+    }
+
+    public function testChargePaymentNotificationRoundTrip(): void
+    {
+        $notification = new ChargePaymentNotification(
+            orderId: 12345,
+            chargeKey: 'deposit',
+            paymentKey: 'payment-1',
+            amount: new Money(new Amount('25.00'), new Currency('USD')),
+            status: ChargePaymentStatus::PAID,
+            occurredAt: '2026-07-09T10:00:01Z',
+            chargeId: 77,
+            paymentId: 'host-payment-1',
+            paidAt: '2026-07-09T10:00:00Z',
+            resultingChargeStatus: ChargeStatus::PARTIALLY_PAID,
+            chargeTarget: new ChargeTarget(ChargeTargetType::PLAN, key: 'plan-payment'),
+            context: ['gateway_event' => 'payment.succeeded'],
+            meta: ['gateway' => 'internal'],
+            notificationId: 'notification-1',
+            source: 'host'
+        );
+
+        $serialized = Hydrator::serialize($notification);
+        $this->assertEquals(12345, $serialized['order_id']);
+        $this->assertEquals('deposit', $serialized['charge_key']);
+        $this->assertEquals('payment-1', $serialized['payment_key']);
+        $this->assertEquals(['amount' => '25.00', 'currency' => 'USD'], $serialized['amount']);
+        $this->assertEquals('paid', $serialized['status']);
+        $this->assertEquals('partially_paid', $serialized['resulting_charge_status']);
+        $this->assertEquals('plan', $serialized['charge_target']['type']);
+        $this->assertEquals('plan-payment', $serialized['charge_target']['key']);
+        $this->assertEquals(['gateway_event' => 'payment.succeeded'], $serialized['context']);
+        $this->assertEquals('notification-1', $serialized['notification_id']);
+
+        $hydrated = Hydrator::hydrate(ChargePaymentNotification::class, $serialized);
+        $this->assertTrue(Hydrator::compare($notification, $hydrated));
+        $this->assertSame(ChargePaymentStatus::PAID, $hydrated->status);
+        $this->assertSame(ChargeStatus::PARTIALLY_PAID, $hydrated->resultingChargeStatus);
+        $this->assertInstanceOf(ChargeTarget::class, $hydrated->chargeTarget);
+        $this->assertSame(ChargeTargetType::PLAN, $hydrated->chargeTarget->type);
+    }
+
+    public function testPaymentNotificationContractIsOptIn(): void
+    {
+        $handler = new PaymentNotificationTestHandler();
+        $notification = new ChargePaymentNotification(
+            orderId: 12345,
+            chargeKey: 'deposit',
+            paymentKey: 'payment-1',
+            amount: new Money(new Amount('25.00'), new Currency('USD')),
+            status: ChargePaymentStatus::PAID,
+            occurredAt: '2026-07-09T10:00:01Z'
+        );
+
+        $result = $handler->notifyPayment($notification);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame($notification, $handler->lastPaymentNotification);
+        $this->assertFalse(method_exists(new ManualTestHandler(), 'notifyPayment'));
     }
 
     public function testDriverContractProvidesConfigSchema(): void

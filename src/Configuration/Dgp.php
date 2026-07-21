@@ -60,6 +60,7 @@ final class Dgp
             HostEndpointType::DELIVERY_UPDATE => 'delivery/update',
             HostEndpointType::GENERIC_ACTION => 'generic/action',
             HostEndpointType::BULK_ACTION => 'bulk/action',
+            HostEndpointType::CHARGE_PAYMENT => 'charge/payment',
             HostEndpointType::CHARGE_UPDATE => 'charge/update',
             HostEndpointType::CHARGE_STATE => 'charge/state',
             HostEndpointType::WEBHOOK => 'webhook',

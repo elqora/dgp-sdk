@@ -20,6 +20,7 @@ final readonly class ChargeStatusView implements Arrayable, JsonSerializable
         public Money $balanceDue,
         public bool $satisfied,
         public ?string $paidAt = null,
+        public ?ChargeTarget $target = null,
         public array $meta = [],
     ) {}
 
@@ -37,6 +38,7 @@ final readonly class ChargeStatusView implements Arrayable, JsonSerializable
             'balance_due' => $this->balanceDue->toArray(),
             'satisfied' => $this->satisfied,
             'paid_at' => $this->paidAt,
+            'target' => $this->target?->toArray(),
             'meta' => $this->meta,
         ];
     }

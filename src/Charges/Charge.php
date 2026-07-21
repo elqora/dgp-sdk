@@ -2,22 +2,24 @@
 
 namespace Elqora\Dgp\Charges;
 
-use Elqora\Dgp\Support\Arrayable;
-use Elqora\Dgp\Money\Money;
 use Elqora\Dgp\Actions\Contracts\NextAction;
-use JsonSerializable;
+use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Money\Money;
+use Elqora\Dgp\Support\Arrayable;
 use InvalidArgumentException;
+use JsonSerializable;
 
 final readonly class Charge implements Arrayable, JsonSerializable
 {
     /**
      * @param list<ChargePayment> $payments
      * @param array<string, mixed> $meta
+     * @param list<ActionButton> $buttons
      */
     public function __construct(
         public string|int|null $id,
         public string $key,
-        public ?string $deliveryKey,
+        public ?ChargeTarget $target,
         public string $label,
         public Money $amount,
         public ChargeStatus $status,
@@ -28,6 +30,7 @@ final readonly class Charge implements Arrayable, JsonSerializable
         public ?string $paidAt = null,
         public ?NextAction $nextAction = null,
         public array $meta = [],
+        public array $buttons = [],
     ) {
         if (str_starts_with($amount->amount->value, '-')) {
             $allowNegative = $meta['allow_negative'] ?? false;
@@ -45,7 +48,7 @@ final readonly class Charge implements Arrayable, JsonSerializable
         return [
             'id' => $this->id,
             'key' => $this->key,
-            'delivery_key' => $this->deliveryKey,
+            'target' => $this->target?->toArray(),
             'label' => $this->label,
             'amount' => $this->amount->toArray(),
             'status' => $this->status->value,
@@ -54,6 +57,7 @@ final readonly class Charge implements Arrayable, JsonSerializable
             'payments' => array_map(fn (ChargePayment $payment) => $payment->toArray(), $this->payments),
             'due_at' => $this->dueAt,
             'paid_at' => $this->paidAt,
+            'buttons' => array_map(fn (ActionButton $button): array => $button->toArray(), $this->buttons),
             'next_action' => $this->nextAction?->toArray(),
             'meta' => $this->meta,
         ];

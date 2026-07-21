@@ -8,6 +8,7 @@ enum HostEndpointType: string
     case DELIVERY_UPDATE = 'delivery.update';
     case GENERIC_ACTION = 'generic.action';
     case BULK_ACTION = 'bulk.action';
+    case CHARGE_PAYMENT = 'charge.payment';
     case CHARGE_UPDATE = 'charge.update';
     case CHARGE_STATE = 'charge.state';
     case WEBHOOK = 'webhook.receive';
