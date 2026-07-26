@@ -448,7 +448,15 @@ class DriverComplianceTest extends TestCase
                     status: 'processing',
                     sequence: 1,
                     meta: ['provider_batch' => 'batch-1'],
-                    isPublic: true
+                    isPublic: true,
+                    buttons: [
+                        new ActionButton(
+                            value: 'stop_segment',
+                            label: 'Stop',
+                            style: ActionButtonStyle::DANGER,
+                            meta: ['segment_key' => 'phase-1'],
+                        ),
+                    ],
                 ),
             ]
         );
@@ -463,10 +471,30 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals(1, $serialized['segments'][0]['sequence']);
         $this->assertEquals(['provider_batch' => 'batch-1'], $serialized['segments'][0]['meta']);
         $this->assertTrue($serialized['segments'][0]['is_public']);
+        $this->assertCount(1, $serialized['segments'][0]['buttons']);
+        $this->assertEquals('stop_segment', $serialized['segments'][0]['buttons'][0]['value']);
         $this->assertEquals(25, $serialized['segments'][0]['progress']['current']);
 
         $this->assertEquals($serialized, $progress->jsonSerialize());
         $this->assertEquals($serialized, json_decode((string) json_encode($progress), true));
+
+        $hydrated = Hydrator::hydrate(DeliveryProgress::class, $serialized);
+        $this->assertInstanceOf(ActionButton::class, $hydrated->segments[0]->buttons[0]);
+        $this->assertEquals('stop_segment', $hydrated->segments[0]->buttons[0]->value);
+    }
+
+    public function testDeliveryProgressSegmentRejectsInvalidButtons(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Text buttons require a label.');
+
+        new DeliveryProgressSegment(
+            key: 'phase-1',
+            progress: 10,
+            buttons: [
+                new ActionButton(value: 'stop_segment', kind: ActionButtonKind::TEXT),
+            ],
+        );
     }
 
     public function testDeliveryProgressHydratesSegmentArraysWithoutNestedSegments(): void
@@ -533,6 +561,13 @@ class DriverComplianceTest extends TestCase
                     'label' => 'First half',
                     'status' => 'complete',
                     'meta' => ['source' => 'sync'],
+                    'buttons' => [
+                        [
+                            'value' => 'inspect_segment',
+                            'kind' => 'text',
+                            'label' => 'Inspect',
+                        ],
+                    ],
                 ],
             ],
         ]);
@@ -543,6 +578,8 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals('first-half', $hydrated->segments[0]->key);
         $this->assertEquals(50.0, $hydrated->segments[0]->progress->percent);
         $this->assertEquals(['source' => 'sync'], $hydrated->segments[0]->meta);
+        $this->assertInstanceOf(ActionButton::class, $hydrated->segments[0]->buttons[0]);
+        $this->assertEquals('inspect_segment', $hydrated->segments[0]->buttons[0]->value);
     }
 
     public function testTypedHostEndpointResolutionKeepsGenericPath(): void
@@ -977,6 +1014,7 @@ class DriverComplianceTest extends TestCase
             targets: [
                 new ActionTarget(ActionTargetType::ORDER, 123),
                 new ActionTarget(ActionTargetType::CHARGE, 456, key: 'deposit'),
+                new ActionTarget(ActionTargetType::SEGMENT, 'allocation-provider-a', key: 'allocation-provider-a'),
                 new ActionTarget('provider.custom_target', 'target-1'),
             ],
             input: ['reason' => 'manual_retry'],
@@ -988,12 +1026,15 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals('retry_selected', $serialized['action_value']);
         $this->assertEquals('order', $serialized['targets'][0]['type']);
         $this->assertEquals('charge', $serialized['targets'][1]['type']);
-        $this->assertEquals('provider.custom_target', $serialized['targets'][2]['type']);
+        $this->assertEquals('segment', $serialized['targets'][2]['type']);
+        $this->assertEquals('allocation-provider-a', $serialized['targets'][2]['key']);
+        $this->assertEquals('provider.custom_target', $serialized['targets'][3]['type']);
 
         $hydrated = Hydrator::hydrate(GenericActionRequest::class, $serialized);
         $this->assertEquals('smm-test', $hydrated->handlerKey);
-        $this->assertCount(3, $hydrated->targets);
-        $this->assertEquals('charge', $hydrated->targets[1]->type);
+        $this->assertCount(4, $hydrated->targets);
+        $this->assertEquals(ActionTargetType::CHARGE, $hydrated->targets[1]->type);
+        $this->assertEquals(ActionTargetType::SEGMENT, $hydrated->targets[2]->type);
         $this->assertEquals(['actor' => 'admin'], $hydrated->context?->context);
     }
 
@@ -1014,7 +1055,7 @@ class DriverComplianceTest extends TestCase
         $hydrated = Hydrator::hydrate(StartBulkRequest::class, Hydrator::serialize($start));
         $this->assertEquals('smm-test', $hydrated->handlerKey);
         $this->assertCount(2, $hydrated->targets);
-        $this->assertEquals('plan', $hydrated->targets[1]->type);
+        $this->assertEquals(ActionTargetType::PLAN, $hydrated->targets[1]->type);
 
         $handler = new SmmTestHandler();
         $this->assertTrue($handler->startBulk($start)->isSuccess());

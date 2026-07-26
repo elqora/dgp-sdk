@@ -123,7 +123,10 @@ final class Hydrator
             }
 
             $type = $parameter->getType();
-            if ($type instanceof ReflectionUnionType && $class === \Elqora\Dgp\Charges\ChargeTarget::class && $name === 'type') {
+            if ($type instanceof ReflectionUnionType
+                && in_array($class, [\Elqora\Dgp\Actions\ActionTarget::class, \Elqora\Dgp\Charges\ChargeTarget::class], true)
+                && $name === 'type'
+            ) {
                 if ($value === null && $parameter->allowsNull()) {
                     $arguments[] = null;
                     continue;

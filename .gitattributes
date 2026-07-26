@@ -1,2 +1,14 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Exclude non-runtime files from git archives and Composer releases
+/.agents/ export-ignore
+/.codex/ export-ignore
+/.phpunit.cache/ export-ignore
+/docs/ export-ignore
+/examples/ export-ignore
+/prodex/ export-ignore
+/registry/ export-ignore
+/tests/ export-ignore
+/phpunit.xml export-ignore
+/phpstan.neon export-ignore

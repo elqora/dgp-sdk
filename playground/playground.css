@@ -1,0 +1,156 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand: Deep Teal / Cyan */
+    --primary-hue: 187;
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 187 90% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 16% 93%;
+    --secondary-foreground: 222 47% 20%;
+    --muted: 210 16% 93%;
+    --muted-foreground: 215 16% 50%;
+    --accent: 187 60% 92%;
+    --accent-foreground: 187 80% 25%;
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 187 90% 38%;
+    --radius: 0.75rem;
+    /* Semantic state tokens */
+    --success: 142 60% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 90% 44%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 80% 48%;
+    --info-foreground: 0 0% 100%;
+    --danger: 0 72% 50%;
+    --danger-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 224 20% 8%;
+    --foreground: 210 30% 94%;
+    --card: 224 18% 11%;
+    --card-foreground: 210 30% 94%;
+    --popover: 224 18% 11%;
+    --popover-foreground: 210 30% 94%;
+    --primary: 187 85% 48%;
+    --primary-foreground: 224 20% 8%;
+    --secondary: 224 15% 16%;
+    --secondary-foreground: 210 20% 80%;
+    --muted: 224 15% 16%;
+    --muted-foreground: 215 15% 58%;
+    --accent: 224 18% 19%;
+    --accent-foreground: 187 70% 70%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 224 15% 18%;
+    --input: 224 15% 18%;
+    --ring: 187 85% 48%;
+    /* Semantic state tokens (dark) */
+    --success: 142 55% 45%;
+    --success-foreground: 142 25% 8%;
+    --warning: 38 88% 54%;
+    --warning-foreground: 38 40% 8%;
+    --info: 210 75% 58%;
+    --info-foreground: 210 40% 8%;
+    --danger: 0 68% 54%;
+    --danger-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+  }
+}
+
+@layer utilities {
+  /* Card glow effects */
+  .card-glow {
+    box-shadow: 0 0 0 1px hsl(var(--border)), 0 1px 3px 0 hsl(var(--foreground) / 0.04), 0 4px 16px -4px hsl(var(--foreground) / 0.06);
+  }
+
+  .card-glow-primary {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2), 0 4px 24px -4px hsl(var(--primary) / 0.12);
+  }
+
+  .card-glow-hover {
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+  }
+
+  .card-glow-hover:hover {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25), 0 8px 32px -6px hsl(var(--primary) / 0.16);
+    transform: translateY(-1px);
+  }
+
+  /* Gradient progress bar */
+  .progress-gradient {
+    background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--info)) 100%);
+  }
+
+  .progress-gradient-success {
+    background: linear-gradient(90deg, hsl(var(--success)) 0%, hsl(var(--success) / 0.7) 100%);
+  }
+
+  .progress-gradient-warning {
+    background: linear-gradient(90deg, hsl(var(--warning)) 0%, hsl(var(--warning) / 0.7) 100%);
+  }
+
+  /* Subtle animated glow for processing states */
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Smooth slide-in animation for expanded cards */
+  @keyframes slide-down {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-slide-down {
+    animation: slide-down 0.18s ease-out forwards;
+  }
+
+  /* Status indicator glow */
+  .status-dot-glow-emerald {
+    box-shadow: 0 0 0 2px hsl(142 76% 55% / 0.4);
+  }
+
+  .status-dot-glow-sky {
+    box-shadow: 0 0 0 2px hsl(199 89% 60% / 0.4);
+  }
+
+  /* Glass morphism surface */
+  .glass-surface {
+    background: hsl(var(--card) / 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}

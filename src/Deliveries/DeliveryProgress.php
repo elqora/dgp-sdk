@@ -2,7 +2,9 @@
 
 namespace Elqora\Dgp\Deliveries;
 
+use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Dgp\Support\Hydrator;
 use JsonSerializable;
 
 final readonly class DeliveryProgress implements Arrayable, JsonSerializable
@@ -107,7 +109,32 @@ final readonly class DeliveryProgress implements Arrayable, JsonSerializable
                         : null,
                     meta: is_array($segment['meta'] ?? null) ? $segment['meta'] : null,
                     isPublic: isset($segment['is_public']) ? (bool) $segment['is_public'] : true,
+                    buttons: self::normalizeButtons($segment['buttons'] ?? []),
                 );
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return list<ActionButton>
+     */
+    private static function normalizeButtons(mixed $buttons): array
+    {
+        if (!is_array($buttons)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($buttons as $button) {
+            if ($button instanceof ActionButton) {
+                $normalized[] = $button;
+                continue;
+            }
+
+            if (is_array($button)) {
+                $normalized[] = Hydrator::hydrate(ActionButton::class, $button);
             }
         }
 

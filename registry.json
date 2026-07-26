@@ -1,0 +1,77 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "items": [
+    {
+      "name": "dgp-sdk",
+      "type": "registry:ui",
+      "dependencies": [
+        "lucide-react",
+        "clsx",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "https://raw.githubusercontent.com/timeax/ui/main/registry.json/smart-card",
+        "https://raw.githubusercontent.com/timeax/ui/main/registry.json/headless-responsive-dialog",
+        "https://raw.githubusercontent.com/timeax/ui/main/registry.json/custom-popover",
+        "interactions"
+      ],
+      "files": [
+        {
+          "path": "registry/dgp-sdk/index.ts",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/index.ts"
+        },
+        {
+          "path": "registry/dgp-sdk/types/sdk.ts",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/types/sdk.ts"
+        },
+        {
+          "path": "registry/dgp-sdk/common/status-badge.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/common/status-badge.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/common/action-button-group.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/common/action-button-group.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/common/segment-bar.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/common/segment-bar.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/client/client-delivery-card.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/client/client-delivery-card.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/client/client-plan-card.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/client/client-plan-card.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/client/client-plan-viewer.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/client/client-plan-viewer.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/admin/admin-delivery-card.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/admin/admin-delivery-card.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/admin/admin-plan-viewer.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/admin/admin-plan-viewer.tsx"
+        },
+        {
+          "path": "registry/dgp-sdk/admin/admin-management-viewer.tsx",
+          "type": "registry:ui",
+          "target": "components/dgp-sdk/admin/admin-management-viewer.tsx"
+        }
+      ]
+    }
+  ]
+}

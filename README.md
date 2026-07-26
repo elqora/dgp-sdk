@@ -404,6 +404,8 @@ use Elqora\Dgp\Deliveries\DeliveryProgress;
 use Elqora\Dgp\Deliveries\DeliveryProgressSegment;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
 use Elqora\Dgp\Deliveries\InitializationDelivery;
+use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\ActionButtonStyle;
 
 $delivery = new InitializationDelivery(
     id: null,
@@ -433,7 +435,32 @@ $progress = new DeliveryProgress(
             label: 'Provider import',
             status: 'processing',
             sequence: 1,
+            buttons: [
+                new ActionButton(
+                    value: 'stop_segment',
+                    label: 'Stop',
+                    style: ActionButtonStyle::DANGER,
+                    meta: ['segment_key' => 'provider-import'],
+                ),
+            ],
         ),
+    ],
+);
+```
+
+Segment buttons are user-selectable commands for addressable progress segments. They do not replace delivery-level interactions; submit them as generic actions with the parent delivery target and the segment target.
+
+```php
+use Elqora\Dgp\Actions\ActionTarget;
+use Elqora\Dgp\Actions\ActionTargetType;
+use Elqora\Dgp\Actions\GenericActionRequest;
+
+$request = new GenericActionRequest(
+    handlerKey: 'smm-test',
+    actionValue: 'stop_segment',
+    targets: [
+        new ActionTarget(ActionTargetType::FULFILLMENT_DELIVERY, $deliveryId, key: $deliveryKey),
+        new ActionTarget(ActionTargetType::SEGMENT, 'provider-import', key: 'provider-import'),
     ],
 );
 ```

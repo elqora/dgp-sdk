@@ -558,6 +558,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
             sequence: $targetSegment->sequence,
             meta: $targetSegment->meta,
             isPublic: $targetSegment->isPublic,
+            buttons: $targetSegment->buttons,
         );
 
         $newSegments = $existingSegments;
@@ -677,6 +678,7 @@ class MockHandlerDeliveriesRepository implements HandlerDeliveriesRepositoryCont
             sequence: $targetSegment->sequence,
             meta: $targetSegment->meta,
             isPublic: $isPublic,
+            buttons: $targetSegment->buttons,
         );
 
         $newSegments = $existingSegments;

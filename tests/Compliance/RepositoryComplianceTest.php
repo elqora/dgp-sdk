@@ -37,6 +37,7 @@ use Elqora\Dgp\Deliveries\DeliveryProgressSegment;
 use Elqora\Dgp\Deliveries\DeliveryStage;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
 use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Dgp\Actions\ActionButtonStyle;
 use Elqora\Dgp\Progress\DeliveryProgressRecord;
 use Elqora\Dgp\Progress\ProgressSource;
 use Elqora\Dgp\Progress\ProgressTimelineQuery;
@@ -1004,7 +1005,15 @@ class RepositoryComplianceTest extends TestCase
             label: 'Initial probe',
             status: 'processing',
             sequence: 1,
-            isPublic: false
+            isPublic: false,
+            buttons: [
+                new ActionButton(
+                    value: 'stop_segment',
+                    label: 'Stop',
+                    style: ActionButtonStyle::DANGER,
+                    meta: ['segment_key' => 'probe-probe'],
+                ),
+            ],
         );
 
         $addSegRes = $deliveries->addSegment(new DeliveryReference(id: $addedDel->id), $segment);
@@ -1018,6 +1027,23 @@ class RepositoryComplianceTest extends TestCase
         $this->assertNotNull($foundWithSeg->progress);
         $this->assertCount(1, $foundWithSeg->progress->segments);
         $this->assertFalse($foundWithSeg->progress->segments[0]->isPublic);
+        $this->assertCount(1, $foundWithSeg->progress->segments[0]->buttons);
+        $this->assertEquals('stop_segment', $foundWithSeg->progress->segments[0]->buttons[0]->value);
+
+        $addSegmentsRes = $deliveries->addSegments(new DeliveryReference(id: $addedDel->id), [
+            new DeliveryProgressSegment(
+                key: 'probe-fallback',
+                progress: 0,
+                label: 'Fallback probe',
+                status: 'pending',
+                sequence: 2,
+                buttons: [
+                    new ActionButton(value: 'start_segment', label: 'Start'),
+                ],
+            ),
+        ]);
+        $this->assertTrue($addSegmentsRes->isSuccess());
+        $this->assertEquals('start_segment', $addSegmentsRes->value()[0]->buttons[0]->value);
 
         // 4. Update delivery status & visibility
         $updateStatusRes = $deliveries->updateDeliveryStatus(new DeliveryReference(id: $addedDel->id), DeliveryStatus::FAILED);
@@ -1045,6 +1071,10 @@ class RepositoryComplianceTest extends TestCase
         $this->assertNotNull($foundUpdatedSeg->progress);
         $this->assertEquals('failed', $foundUpdatedSeg->progress->segments[0]->status);
         $this->assertTrue($foundUpdatedSeg->progress->segments[0]->isPublic);
+        $this->assertCount(1, $foundUpdatedSeg->progress->segments[0]->buttons);
+        $this->assertEquals('stop_segment', $foundUpdatedSeg->progress->segments[0]->buttons[0]->value);
+        $this->assertCount(2, $foundUpdatedSeg->progress->segments);
+        $this->assertEquals('start_segment', $foundUpdatedSeg->progress->segments[1]->buttons[0]->value);
 
         // 6. Record progress for delivery segment
         $progressHandler = Dgp::deliveryProgressRepository($handler);
