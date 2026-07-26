@@ -2,10 +2,10 @@
 
 namespace Elqora\Dgp\Deliveries;
 
-use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\ActionValidator;
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Interactions\Contracts\Interaction;
 use InvalidArgumentException;
 use JsonSerializable;
 
@@ -24,7 +24,7 @@ abstract readonly class Delivery implements Arrayable, JsonSerializable
         mixed $progress = null,
         public string|int|null $planId = null,
         public string|int|null $startId = null,
-        public ?NextAction $nextAction = null,
+        public ?Interaction $nextAction = null,
         public array $meta = [],
         public string $kind = 'default',
         public ?string $name = null,

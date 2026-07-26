@@ -36,9 +36,7 @@ use Elqora\Dgp\Deliveries\DeliveryProgress;
 use Elqora\Dgp\Deliveries\DeliveryProgressSegment;
 use Elqora\Dgp\Deliveries\DeliveryStage;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
-use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
-use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Progress\DeliveryProgressRecord;
 use Elqora\Dgp\Progress\ProgressSource;
 use Elqora\Dgp\Progress\ProgressTimelineQuery;
@@ -51,6 +49,7 @@ use Elqora\Dgp\Tests\Fixtures\Repository\MockDeliveryProgressRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockAuditRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockInsightsRepository;
 use Elqora\Dgp\Tests\Fixtures\Repository\MockHandlerInsightsRepository;
+use Elqora\Interactions\Interactions\Redirect;
 use InvalidArgumentException;
 
 class RepositoryComplianceTest extends TestCase
@@ -197,18 +196,14 @@ class RepositoryComplianceTest extends TestCase
         $this->assertEquals($startResult->id, $view->currentStartResult->id);
     }
 
-    public function testRepositoryPreservesDeliveryNextAction(): void
+    public function testRepositoryPreservesDeliveryInteraction(): void
     {
         $runtimeRepository = new MockRuntimeRepository();
         $handler = HandlerReference::fromKey('jap');
         Dgp::registerRuntimeRepository($runtimeRepository);
         $repo = Dgp::runtimeRepository($handler);
 
-        $redirectAction = new RedirectAction(
-            url: 'https://gateway.example/download',
-            external: true,
-            label: 'Download File'
-        );
+        $redirectAction = new Redirect(url: 'https://gateway.example/download');
 
         // 1. Save plan with a delivery carrying a next action
         $plan = new Plan(
@@ -244,7 +239,7 @@ class RepositoryComplianceTest extends TestCase
         $this->assertEquals('approve', $savedPlan->deliveries[0]->buttons[0]->value);
         $this->assertNotNull($savedPlan->deliveries[0]->nextAction);
         $action1 = $savedPlan->deliveries[0]->nextAction;
-        $this->assertInstanceOf(RedirectAction::class, $action1);
+        $this->assertInstanceOf(Redirect::class, $action1);
         $this->assertEquals('https://gateway.example/download', $action1->url);
 
         // 2. Fetch deliveries from repo
@@ -254,7 +249,7 @@ class RepositoryComplianceTest extends TestCase
         $this->assertEquals('approve', $fetched[0]->buttons[0]->value);
         $this->assertNotNull($fetched[0]->nextAction);
         $action2 = $fetched[0]->nextAction;
-        $this->assertInstanceOf(RedirectAction::class, $action2);
+        $this->assertInstanceOf(Redirect::class, $action2);
         $this->assertEquals('https://gateway.example/download', $action2->url);
 
         $deliveryUpdate = new InitializationDelivery(

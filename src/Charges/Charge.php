@@ -2,11 +2,11 @@
 
 namespace Elqora\Dgp\Charges;
 
-use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\ActionValidator;
 use Elqora\Dgp\Money\Money;
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Interactions\Contracts\Interaction;
 use InvalidArgumentException;
 use JsonSerializable;
 
@@ -29,7 +29,7 @@ final readonly class Charge implements Arrayable, JsonSerializable
         public array $payments = [],
         public ?string $dueAt = null,
         public ?string $paidAt = null,
-        public ?NextAction $nextAction = null,
+        public ?Interaction $nextAction = null,
         public array $meta = [],
         public array $buttons = [],
     ) {

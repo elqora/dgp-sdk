@@ -12,7 +12,7 @@ final readonly class OrderManagement implements Arrayable, JsonSerializable
      * @param list<ManagementWarning> $warnings
      * @param list<ManagementInstruction> $instructions
      * @param list<ManagementPermission> $permissions
-     * @param list<\Elqora\Dgp\Actions\Contracts\NextAction> $actions
+     * @param list<\Elqora\Interactions\Contracts\Interaction> $actions
      * @param array<string, mixed> $refreshPolicy
      * @param array<string, mixed> $meta
      */

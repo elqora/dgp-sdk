@@ -2,8 +2,8 @@
 
 namespace Elqora\Dgp\Actions;
 
-use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Interactions\Contracts\Interaction;
 use InvalidArgumentException;
 use JsonSerializable;
 
@@ -22,7 +22,7 @@ final readonly class ActionButton implements Arrayable, JsonSerializable
         public ?bool $disabled = null,
         public ?string $disabledReason = null,
         public ?array $meta = null,
-        public ?NextAction $nextAction = null,
+        public ?Interaction $nextAction = null,
     ) {
         $errors = ActionValidator::validateButton($this);
 

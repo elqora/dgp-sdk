@@ -46,7 +46,6 @@ use Elqora\Dgp\Runtime\RuntimeContext;
 use Elqora\Dgp\Runtime\References\PlanReference;
 use Elqora\Dgp\Runtime\PlanStatus;
 use Elqora\Dgp\Runtime\StartResultStatus;
-use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\ActionButtonKind;
 use Elqora\Dgp\Actions\ActionButtonStyle;
@@ -54,7 +53,6 @@ use Elqora\Dgp\Actions\ActionTarget;
 use Elqora\Dgp\Actions\ActionTargetType;
 use Elqora\Dgp\Actions\Contracts\GenericActionContract;
 use Elqora\Dgp\Actions\GenericActionRequest;
-use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Bulk\CancelBulkRequest;
 use Elqora\Dgp\Bulk\Contracts\BulkActionContract;
 use Elqora\Dgp\Bulk\RefreshBulkRequest;
@@ -83,6 +81,14 @@ use Elqora\ConfigKit\Schema\ConfigSchema;
 use Elqora\ConfigKit\Schema\UiConfigSchema;
 use Elqora\ConfigKit\Support\ConfigBag;
 use Elqora\ConfigKit\Support\ConfigValidationResult;
+use Elqora\Interactions\DTOs\Execution\HandlerExecution;
+use Elqora\Interactions\DTOs\ScriptDefinition;
+use Elqora\Interactions\Enums\Presentation;
+use Elqora\Interactions\Exceptions\InvalidInteractionPayload;
+use Elqora\Interactions\Interactions\Instructions;
+use Elqora\Interactions\Interactions\QrCode;
+use Elqora\Interactions\Interactions\Redirect;
+use Elqora\Interactions\Interactions\Script;
 use Elqora\Dgp\Balance\BalanceRequest;
 use Elqora\Dgp\Health\HealthRequest;
 use InvalidArgumentException;
@@ -1092,12 +1098,11 @@ class DriverComplianceTest extends TestCase
         $this->assertTrue(Hydrator::compare($charge, Hydrator::hydrate(Charge::class, $charge->toArray())));
     }
 
-    public function testActionButtonSupportsNestedNextActionWithReservedValue(): void
+    public function testActionButtonSupportsNestedInteractionWithReservedValue(): void
     {
-        $redirect = new RedirectAction(
+        $redirect = new Redirect(
             url: 'https://gateway.example/pay',
-            external: true,
-            label: 'Open payment'
+            metadata: ['label' => 'Open payment']
         );
 
         $button = new ActionButton(
@@ -1110,7 +1115,7 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals('redirect', $serialized['next_action']['type']);
 
         $hydrated = Hydrator::hydrate(ActionButton::class, $serialized);
-        $this->assertInstanceOf(RedirectAction::class, $hydrated->nextAction);
+        $this->assertInstanceOf(Redirect::class, $hydrated->nextAction);
         $this->assertTrue(Hydrator::compare($button, $hydrated));
     }
 
@@ -1125,7 +1130,7 @@ class DriverComplianceTest extends TestCase
         );
     }
 
-    public function testActionButtonRejectsNextActionWithoutReservedValue(): void
+    public function testActionButtonRejectsInteractionWithoutReservedValue(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Buttons with a next action must use value "action".');
@@ -1133,11 +1138,27 @@ class DriverComplianceTest extends TestCase
         new ActionButton(
             value: 'pay',
             label: 'Pay',
-            nextAction: new RedirectAction(url: 'https://gateway.example/pay')
+            nextAction: new Redirect(url: 'https://gateway.example/pay')
         );
     }
 
-    public function testActionButtonRejectsReservedValueWithoutNextAction(): void
+    public function testInvalidInteractionPayloadsFailThroughInteractionValidation(): void
+    {
+        $this->expectException(InvalidInteractionPayload::class);
+        $this->expectExceptionMessage('URL must not be empty.');
+
+        Hydrator::hydrate(Plan::class, [
+            'id' => null,
+            'key' => 'invalid-interaction-plan',
+            'state' => [],
+            'next_action' => [
+                'type' => 'redirect',
+                'url' => '',
+            ],
+        ]);
+    }
+
+    public function testActionButtonRejectsReservedValueWithoutInteraction(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Button value "action" requires a next action.');
@@ -1523,13 +1544,9 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals('scalar-value', $handler->redactForLogs('scalar-value'));
     }
 
-    public function testDeliveryNextActionIntegration(): void
+    public function testRuntimeNextActionFieldUsesInteractionPayloads(): void
     {
-        $redirectAction = new RedirectAction(
-            url: 'https://gateway.example/download/file-abc',
-            external: true,
-            label: 'Download Key'
-        );
+        $redirectAction = new Redirect(url: 'https://gateway.example/download/file-abc');
 
         // 1. Delivery construction with no next action
         $initNoAction = new InitializationDelivery(
@@ -1564,9 +1581,9 @@ class DriverComplianceTest extends TestCase
         $hydrated = Hydrator::hydrate(InitializationDelivery::class, $serialized);
         $this->assertInstanceOf(InitializationDelivery::class, $hydrated);
         $this->assertNotNull($hydrated->nextAction);
-        $this->assertInstanceOf(RedirectAction::class, $hydrated->nextAction);
+        $this->assertInstanceOf(Redirect::class, $hydrated->nextAction);
         $action = $hydrated->nextAction;
-        $this->assertEquals('redirect', $action->type());
+        $this->assertEquals('redirect', $action->type()->value);
         $this->assertEquals('https://gateway.example/download/file-abc', $action->url);
 
         // 5. FulfillmentDelivery construct and parent-constructor forwarding
@@ -1581,6 +1598,29 @@ class DriverComplianceTest extends TestCase
             nextAction: $redirectAction
         );
         $this->assertSame($redirectAction, $fulfillment->nextAction);
+
+        $interactions = [
+            new Instructions(content: 'Review the fulfillment details.', title: 'Review', presentation: Presentation::Dialog),
+            new QrCode(value: 'otpauth://totp/example', title: 'Authenticator', presentation: Presentation::Inline),
+            new Script(
+                scripts: [new ScriptDefinition(src: 'https://cdn.example.test/inline.js', key: 'inline')],
+                execute: new HandlerExecution('inline-handler', 'run'),
+                presentation: Presentation::Inline
+            ),
+        ];
+
+        foreach ($interactions as $index => $interaction) {
+            $plan = new Plan(
+                id: null,
+                key: "interaction-plan-{$index}",
+                state: [],
+                nextAction: $interaction
+            );
+
+            $payload = Hydrator::serialize($plan);
+            $this->assertSame($interaction->type()->value, $payload['next_action']['type']);
+            $this->assertTrue(Hydrator::compare($plan, Hydrator::hydrate(Plan::class, $payload)));
+        }
     }
 
     public function testBalanceContractSignatureAndHandlerImplementations(): void

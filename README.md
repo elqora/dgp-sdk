@@ -239,14 +239,14 @@ echo $privateAsset->path;   // /dgp/smm-test/assets/invoice.pdf
 $custom = Dgp::path('smm-test', 'custom/action');
 ```
 
-## Next Actions
+## Interactions
 
-Handlers guide user or host next steps through `NextAction` DTOs.
+Handlers guide user or host next steps through `elqora/interactions` DTOs. Runtime DTOs keep the `nextAction` property and serialize it as `next_action`, but the payload is now an interaction.
 
 ```php
 use Elqora\Dgp\Actions\ActionButton;
-use Elqora\Dgp\Actions\RedirectAction;
 use Elqora\Dgp\Runtime\Plan;
+use Elqora\Interactions\Interactions\Redirect;
 
 $plan = new Plan(
     id: null,
@@ -260,30 +260,27 @@ $plan = new Plan(
         new ActionButton(
             value: 'action',
             label: 'Complete Invoice Payment',
-            nextAction: new RedirectAction(
+            nextAction: new Redirect(
                 url: 'https://gateway.example/pay/invoice-88',
-                external: true,
-                label: 'Complete Invoice Payment',
+                metadata: ['label' => 'Complete Invoice Payment'],
             ),
         ),
     ],
-    nextAction: new RedirectAction(
+    nextAction: new Redirect(
         url: 'https://gateway.example/pay/invoice-88',
-        external: true,
-        label: 'Complete Invoice Payment',
+        metadata: ['label' => 'Complete Invoice Payment'],
     ),
 );
 ```
 
-Built-in next actions include:
+Supported interaction types come from `elqora/interactions`:
 
-- `RedirectAction`
-- `PopupAction`
-- `PopoverAction`
-- `InlineAction`
-- `InstructionsAction`
-- `QrCodeAction`
-- `CustomAction`
+- `Redirect`
+- `Instructions`
+- `QrCode`
+- `Script`
+- `Mount`
+- `Component`
 
 Buttons are independent controls exposed on runtime DTOs separately from `nextAction`.
 
@@ -307,18 +304,33 @@ $buttons = [
 ];
 ```
 
-Use the reserved value `action` when a button should execute its attached `NextAction` instead of submitting a handler-defined button value.
+Use the reserved value `action` when a button should execute its attached interaction instead of submitting a handler-defined button value.
 
 ```php
 use Elqora\Dgp\Actions\ActionButton;
-use Elqora\Dgp\Actions\RedirectAction;
+use Elqora\Interactions\Interactions\Redirect;
 
 $button = new ActionButton(
     value: 'action',
     label: 'Open payment',
-    nextAction: new RedirectAction(
+    nextAction: new Redirect(
         url: 'https://gateway.example/pay/invoice-88',
     ),
+);
+```
+
+Inline client behavior is represented as an interaction script.
+
+```php
+use Elqora\Interactions\DTOs\Execution\HandlerExecution;
+use Elqora\Interactions\DTOs\ScriptDefinition;
+use Elqora\Interactions\Enums\Presentation;
+use Elqora\Interactions\Interactions\Script;
+
+$inline = new Script(
+    scripts: [new ScriptDefinition(src: 'https://cdn.example.test/checkout.js', key: 'checkout')],
+    execute: new HandlerExecution('checkout-widget', 'mount'),
+    presentation: Presentation::Inline,
 );
 ```
 

@@ -2,10 +2,10 @@
 
 namespace Elqora\Dgp\Runtime;
 
-use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
 use Elqora\Dgp\Actions\ActionValidator;
 use Elqora\Dgp\Support\Arrayable;
+use Elqora\Interactions\Contracts\Interaction;
 use InvalidArgumentException;
 use JsonSerializable;
 
@@ -21,7 +21,7 @@ final readonly class PreparationResult implements Arrayable, JsonSerializable
         public string|int $planId,
         public PreparationStatus $status,
         public array $deliveries = [],
-        public ?NextAction $nextAction = null,
+        public ?Interaction $nextAction = null,
         public array $state = [],
         public array $meta = [],
         public array $buttons = [],

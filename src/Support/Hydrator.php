@@ -5,6 +5,8 @@ namespace Elqora\Dgp\Support;
 use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionUnionType;
+use Elqora\Interactions\Contracts\Interaction;
+use Elqora\Interactions\Serialization\InteractionFactory;
 use InvalidArgumentException;
 
 final class Hydrator
@@ -44,18 +46,14 @@ final class Hydrator
             return $chart;
         }
 
-        if ($class === \Elqora\Dgp\Actions\Contracts\NextAction::class) {
-            if (is_array($data) && isset($data['type'])) {
-                $concreteClass = self::resolveConcreteActionClass((string)$data['type']);
-                if ($concreteClass !== null) {
-                    /** @var class-string<T> $concreteClass */
-                    /** @var T $hydratedAction */
-                    $hydratedAction = self::hydrate($concreteClass, $data);
-                    return $hydratedAction;
-                }
-
-                throw new InvalidArgumentException("Unsupported next action type '{$data['type']}'.");
+        if ($class === Interaction::class) {
+            if (!is_array($data)) {
+                throw new InvalidArgumentException('Interaction data must be an array.');
             }
+
+            /** @var T $interaction */
+            $interaction = InteractionFactory::fromArray($data);
+            return $interaction;
         }
 
         if (!class_exists($class) && !interface_exists($class)) {
@@ -154,7 +152,7 @@ final class Hydrator
             // Check if collection parameter
             if ($type instanceof ReflectionNamedType && $type->getName() === 'array' && is_array($value)) {
                 $collectionType = self::getCollectionType($docComment, $name, $class);
-                if ($collectionType !== null && (class_exists($collectionType) || enum_exists($collectionType))) {
+                if ($collectionType !== null && (class_exists($collectionType) || interface_exists($collectionType) || enum_exists($collectionType))) {
                     /** @var class-string<object> $collectionType */
                     $hydratedList = [];
                     foreach ($value as $item) {
@@ -291,6 +289,9 @@ final class Hydrator
         if (class_exists($typeName)) {
             return $typeName;
         }
+        if (interface_exists($typeName)) {
+            return $typeName;
+        }
         if (enum_exists($typeName)) {
             return $typeName;
         }
@@ -299,13 +300,13 @@ final class Hydrator
         $namespace = $reflection->getNamespaceName();
         if ($namespace !== '') {
             $namespaced = $namespace . '\\' . $typeName;
-            if (class_exists($namespaced) || enum_exists($namespaced)) {
+            if (class_exists($namespaced) || interface_exists($namespaced) || enum_exists($namespaced)) {
                 return $namespaced;
             }
         }
         // Try prefixing with root namespace
         $rootNamespaced = 'Elqora\\Dgp\\' . $typeName;
-        if (class_exists($rootNamespaced) || enum_exists($rootNamespaced)) {
+        if (class_exists($rootNamespaced) || interface_exists($rootNamespaced) || enum_exists($rootNamespaced)) {
             return $rootNamespaced;
         }
         return $typeName;
@@ -314,20 +315,6 @@ final class Hydrator
     private static function camelToSnake(string $string): string
     {
         return strtolower((string)preg_replace('/(?<!^)[A-Z]/', '_$0', $string));
-    }
-
-    private static function resolveConcreteActionClass(string $type): ?string
-    {
-        $map = [
-            'redirect' => \Elqora\Dgp\Actions\RedirectAction::class,
-            'custom' => \Elqora\Dgp\Actions\CustomAction::class,
-            'inline' => \Elqora\Dgp\Actions\InlineAction::class,
-            'instructions' => \Elqora\Dgp\Actions\InstructionsAction::class,
-            'popover' => \Elqora\Dgp\Actions\PopoverAction::class,
-            'popup' => \Elqora\Dgp\Actions\PopupAction::class,
-            'qr_code' => \Elqora\Dgp\Actions\QrCodeAction::class,
-        ];
-        return $map[$type] ?? null;
     }
 
     /**

@@ -2,8 +2,8 @@
 
 namespace Elqora\Dgp\Deliveries;
 
-use Elqora\Dgp\Actions\Contracts\NextAction;
 use Elqora\Dgp\Actions\ActionButton;
+use Elqora\Interactions\Contracts\Interaction;
 use InvalidArgumentException;
 
 final readonly class FulfillmentDelivery extends Delivery
@@ -20,7 +20,7 @@ final readonly class FulfillmentDelivery extends Delivery
         mixed $progress = null,
         ?string $planId = null,
         string|int|null $startId = null,
-        ?NextAction $nextAction = null,
+        ?Interaction $nextAction = null,
         array $meta = [],
         string $kind = 'default',
         ?string $name = null,

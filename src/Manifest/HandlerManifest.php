@@ -12,7 +12,7 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
      * @param list<Capability> $capabilities
      * @param list<string> $supportedServiceSchemaVersions
      * @param list<string> $synchronizationModes
-     * @param list<string> $supportedNextActionTypes
+     * @param list<string> $supportedInteractionTypes
      * @param array<string, mixed> $limitations
      * @param array<string, mixed> $featureFlags
      * @param array<string, mixed> $meta
@@ -27,7 +27,7 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
         public array $supportedServiceSchemaVersions = [],
         public array $synchronizationModes = [],
         public bool $webhookSupport = false,
-        public array $supportedNextActionTypes = [],
+        public array $supportedInteractionTypes = [],
         public array $limitations = [],
         public array $featureFlags = [],
         public array $meta = [],
@@ -59,7 +59,7 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
             'supported_service_schema_versions' => $this->supportedServiceSchemaVersions,
             'synchronization_modes' => $this->synchronizationModes,
             'webhook_support' => $this->webhookSupport,
-            'supported_next_action_types' => $this->supportedNextActionTypes,
+            'supported_interaction_types' => $this->supportedInteractionTypes,
             'limitations' => $this->limitations,
             'feature_flags' => $this->featureFlags,
             'meta' => $this->meta,
