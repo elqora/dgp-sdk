@@ -37,11 +37,11 @@ export function AdminDeliveryCard({
   return (
     <div
       className={`
-        relative overflow-hidden rounded-xl border bg-card text-card-foreground text-xs
+        relative rounded-xl border bg-card text-card-foreground text-xs
         card-glow transition-all duration-150
         ${isInternal
-          ? "border-warning/30 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-warning/70"
-          : "border-border/60 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-muted-foreground/30"}
+          ? "border-warning/30 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:rounded-l-xl before:bg-warning/70"
+          : "border-border/60 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:rounded-l-xl before:bg-muted-foreground/30"}
         ${className}
       `}
     >
@@ -112,6 +112,7 @@ export function AdminDeliveryCard({
                 collapsibleSegments={collapsibleSegments}
                 defaultSegmentsExpanded={defaultSegmentsExpanded}
                 onChargeClick={onChargeClick}
+                onActionClick={onActionClick}
               />
             </div>
           )}

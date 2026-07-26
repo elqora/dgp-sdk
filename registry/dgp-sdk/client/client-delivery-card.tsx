@@ -50,9 +50,9 @@ export function ClientDeliveryCard({
   return (
     <div
       className={`
-        relative overflow-hidden rounded-xl border bg-card text-card-foreground
+        relative rounded-xl border bg-card text-card-foreground
         card-glow card-glow-hover
-        before:absolute before:inset-y-0 before:left-0 before:w-0.5 ${accent}
+        before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:rounded-l-xl ${accent}
         ${isProcessing ? "border-info/25" : "border-border/50"}
         ${className}
       `}
@@ -123,6 +123,7 @@ export function ClientDeliveryCard({
               collapsibleSegments={collapsibleSegments}
               defaultSegmentsExpanded={defaultSegmentsExpanded}
               onChargeClick={onChargeClick}
+              onActionClick={onActionClick}
             />
           )}
 

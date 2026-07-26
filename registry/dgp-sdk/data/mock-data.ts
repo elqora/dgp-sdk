@@ -130,6 +130,9 @@ export const mockFulfillmentDelivery2: DeliveryDto = {
         status: "completed",
         sequence: 1,
         is_public: true,
+        buttons: [
+          { value: "inspect_2a", kind: "text", label: "Logs", style: "default" }
+        ],
       },
       {
         key: "sub_batch_2b",
@@ -149,6 +152,9 @@ export const mockFulfillmentDelivery2: DeliveryDto = {
           buttons: [],
           meta: {},
         },
+        buttons: [
+          { value: "retry_2b", kind: "text", label: "Retry Segment", style: "primary" }
+        ],
       },
     ],
   },

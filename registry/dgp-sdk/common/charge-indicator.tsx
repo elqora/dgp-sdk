@@ -136,7 +136,7 @@ export function ChargeIndicator({
           onClick={handleClick}
           title={`Charge: ${primaryCharge.key} (${cfg.label}) — Click for details`}
           className={`
-            inline-flex items-center font-mono font-medium border rounded-full
+            inline-flex items-center font-medium border rounded-full
             transition-all duration-150 cursor-pointer select-none shadow-2xs
             ${sizeClasses} ${cfg.bg}
           `}
@@ -160,13 +160,13 @@ export function ChargeIndicator({
           onClick={(e) => e.stopPropagation()}
           className="
             absolute right-0 top-full mt-1.5 z-50 w-64 p-3 rounded-xl border border-border/80
-            bg-popover text-popover-foreground shadow-lg font-sans text-xs animate-slide-down
+            bg-popover text-popover-foreground shadow-lg text-xs animate-slide-down
           "
         >
           <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-2">
-            <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-              <span className="font-bold uppercase tracking-wider text-foreground">
+              <span className="font-bold text-foreground">
                 {"label" in primaryCharge ? (primaryCharge as ChargeDto).label || primaryCharge.key : primaryCharge.key}
               </span>
             </div>
@@ -179,9 +179,9 @@ export function ChargeIndicator({
           </div>
 
           <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-muted/40 font-mono text-[11px]">
+            <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-muted/40 text-xs">
               <div>
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Amount</p>
+                <p className="text-[10px] text-muted-foreground">Amount</p>
                 <p className="font-bold text-foreground">{formatMoney(primaryCharge.amount)}</p>
               </div>
               <div>

@@ -171,6 +171,7 @@ export interface DeliveryProgressSegmentDto {
   is_public: boolean;
   charge?: ChargeDto | ChargeStatusViewDto | null;
   charges?: (ChargeDto | ChargeStatusViewDto)[] | null;
+  buttons?: ActionButtonDto[];
 }
 
 /**
