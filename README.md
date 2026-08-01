@@ -43,6 +43,15 @@ The handler implements:
 - Charges
 - Management
 
+## Ecosystem
+
+- [DGP Spec](https://github.com/elqora/dgp-spec) owns canonical wire contracts.
+- [DGP Core](https://github.com/elqora/dgp-core) interprets product definitions.
+- [DGP Validation](https://github.com/elqora/dgp-validation) validates definitions for ingestion and publication.
+- [DGP Ordering](https://github.com/elqora/dgp-ordering) constructs customer order snapshots.
+- [DGP Workspace](https://github.com/elqora/dgp-workspace) supplies headless editorial session infrastructure.
+- [DGP Studio](https://github.com/elqora/dgp-studio) provides visual authoring, testing, and publication UX.
+
 ## Driver Contract
 
 Handlers implement `DgpDriverContract`, which aggregates the mandatory protocol contracts:

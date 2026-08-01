@@ -19,6 +19,6 @@ This repository is the framework-neutral backend protocol and PHP toolkit for DG
 
 - This sibling clone at `D:\Projects\GitHub\elqora\digital-goods-protocol\dgp-sdk` is the only local SDK authority for this workspace.
 - Legacy frontend migration source: `D:\Projects\GitHub\digital-service-ui-builder`.
-- Current Studio reference: `D:\Projects\GitHub\service-builder`.
-- Sibling repositories: `../dgp-spec`, `../dgp-core`, `../dgp-validation`, `../dgp-ordering`, and `../dgp-workspace`.
+- Studio destination: sibling `../dgp-studio`; code and history migration source: `D:\Projects\GitHub\service-builder`.
+- Sibling repositories: `../dgp-spec`, `../dgp-core`, `../dgp-validation`, `../dgp-ordering`, `../dgp-workspace`, and `../dgp-studio`.
 - Existing SDK documentation in this repository remains authoritative for current runtime behavior.
