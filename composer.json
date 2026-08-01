@@ -1,7 +1,7 @@
 {
     "name": "elqora/dgp-sdk",
     "description": "A framework-neutral protocol for digital-product implementations with minimal framework-neutral dependencies.",
-    "license": "MIT",
+    "license": "AGPL-3.0-only",
     "type": "library",
     "require": {
         "php": ">=8.2",
