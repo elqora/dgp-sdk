@@ -10,7 +10,7 @@ This repository is the framework-neutral backend protocol and PHP toolkit for DG
 
 - Preserve handler ownership of service catalogs, pricing logic, charges, and workflow progression.
 - Preserve host ownership of persistence, routing, rendering, payments, and infrastructure ports.
-- Do not import frontend rendering, ordering UI, Studio, or editorial concerns.
+- Do not import frontend rendering, Form Palette, `dgp-ordering-form-palette`, ordering UI, Studio, or editorial concerns.
 - Browser JavaScript expressions used for quantity and customer-field evaluation are frontend contracts; this SDK is not required to execute them.
 - Keep service `meta` host-dependent; do not require a universal frontend interpretation.
 - Coordinate wire-contract changes with sibling `dgp-spec` and shared conformance fixtures.
@@ -20,5 +20,5 @@ This repository is the framework-neutral backend protocol and PHP toolkit for DG
 - This sibling clone at `D:\Projects\GitHub\elqora\digital-goods-protocol\dgp-sdk` is the only local SDK authority for this workspace.
 - Legacy frontend migration source: `D:\Projects\GitHub\digital-service-ui-builder`.
 - Studio destination: sibling `../dgp-studio`; code and history migration source: `D:\Projects\GitHub\service-builder`.
-- Sibling repositories: `../dgp-spec`, `../dgp-core`, `../dgp-validation`, `../dgp-ordering`, `../dgp-workspace`, and `../dgp-studio`.
+- Sibling repositories: `../dgp-spec`, `../dgp-core`, `../dgp-validation`, `../dgp-ordering`, `../dgp-ordering-form-palette`, `../dgp-workspace`, and `../dgp-studio`.
 - Existing SDK documentation in this repository remains authoritative for current runtime behavior.

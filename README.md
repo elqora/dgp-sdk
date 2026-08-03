@@ -49,6 +49,7 @@ The handler implements:
 - [DGP Core](https://github.com/elqora/dgp-core) interprets product definitions.
 - [DGP Validation](https://github.com/elqora/dgp-validation) validates definitions for ingestion and publication.
 - [DGP Ordering](https://github.com/elqora/dgp-ordering) constructs customer order snapshots.
+- [DGP Ordering Form Palette](https://github.com/elqora/dgp-ordering-form-palette) provides an optional frontend Form Palette integration.
 - [DGP Workspace](https://github.com/elqora/dgp-workspace) supplies headless editorial session infrastructure.
 - [DGP Studio](https://github.com/elqora/dgp-studio) provides visual authoring, testing, and publication UX.
 
