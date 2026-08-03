@@ -8,29 +8,29 @@ use JsonSerializable;
 final readonly class OrderSnapshot implements Arrayable, JsonSerializable
 {
     /**
-     * @param list<string|int> $services
-     * @param array<string, list<string|int>> $serviceMap
+     * @param list<string|int> $serviceIds
+     * @param array<string, list<string|int>> $serviceIdsByNode
      * @param array<string, mixed>|null $fallbacks
      * @param list<array<string, mixed>> $utilities
-     * @param array<string, mixed>|null $warnings
-     * @param array<string, mixed>|null $meta
+     * @param array<string, mixed> $meta
      */
     public function __construct(
         public string $version,
         public string $mode,
         public string $builtAt,
+        public string|int $productId,
+        public string $definitionSchemaVersion,
         public OrderSnapshotSelection $selection,
         public OrderSnapshotInputs $inputs,
         public int|float $quantity,
         public OrderSnapshotQuantitySource $quantitySource,
         public int|float $min,
         public int|float $max,
-        public array $services = [],
-        public array $serviceMap = [],
+        public array $serviceIds = [],
+        public array $serviceIdsByNode = [],
         public ?array $fallbacks = null,
         public array $utilities = [],
-        public ?array $warnings = null,
-        public ?array $meta = null,
+        public array $meta = [],
     ) {}
 
     /**
@@ -50,18 +50,19 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
         return [
             'version' => $this->version,
             'mode' => $this->mode,
-            'builtAt' => $this->builtAt,
+            'built_at' => $this->builtAt,
+            'product_id' => $this->productId,
+            'definition_schema_version' => $this->definitionSchemaVersion,
             'selection' => $this->selection->toArray(),
             'inputs' => $this->inputs->toArray(),
             'quantity' => $this->quantity,
-            'quantitySource' => $this->quantitySource->toArray(),
+            'quantity_source' => $this->quantitySource->toArray(),
             'min' => $this->min,
             'max' => $this->max,
-            'services' => $this->services,
-            'serviceMap' => $this->serviceMap,
+            'service_ids' => $this->serviceIds,
+            'service_ids_by_node' => $this->serviceIdsByNode,
             'fallbacks' => $this->fallbacks,
             'utilities' => $this->utilities,
-            'warnings' => $this->warnings,
             'meta' => $this->meta,
         ];
     }
@@ -89,17 +90,25 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
         return $this->builtAt;
     }
 
-    public function tag(): string
+    public function productId(): string|int
     {
-        return $this->selection->tag;
+        return $this->productId;
     }
 
-    /**
-     * @return list<string>
-     */
-    public function buttons(): array
+    public function definitionSchemaVersion(): string
     {
-        return $this->selection->buttons;
+        return $this->definitionSchemaVersion;
+    }
+
+    public function filterId(): string
+    {
+        return $this->selection->filterId;
+    }
+
+    /** @return list<string> */
+    public function triggerIds(): array
+    {
+        return $this->selection->triggerIds;
     }
 
     /**
@@ -154,17 +163,17 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
     /**
      * @return list<string|int>
      */
-    public function services(): array
+    public function serviceIds(): array
     {
-        return $this->services;
+        return $this->serviceIds;
     }
 
     /**
      * @return array<string, list<string|int>>
      */
-    public function serviceMap(): array
+    public function serviceIdsByNode(): array
     {
-        return $this->serviceMap;
+        return $this->serviceIdsByNode;
     }
 
     /**
@@ -172,7 +181,7 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
      */
     public function servicesForNode(string $nodeId): array
     {
-        return $this->serviceMap[$nodeId] ?? [];
+        return $this->serviceIdsByNode[$nodeId] ?? [];
     }
 
     /**
@@ -192,17 +201,9 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
      */
-    public function warnings(): ?array
-    {
-        return $this->warnings;
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    public function meta(): ?array
+    public function meta(): array
     {
         return $this->meta;
     }
@@ -245,29 +246,11 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
             $globalList = [];
         }
 
-        // 2. Resolve Node Fallbacks
+        // 2. Resolve node-specific fallbacks from the canonical node map.
         if ($nodeId !== null) {
             $nodesGroup = $fallbacks['nodes'] ?? [];
-            $serviceNodeGroup = null;
-
-            if (array_key_exists($serviceId, $nodesGroup)) {
-                $serviceNodeGroup = $nodesGroup[$serviceId];
-            } elseif (is_numeric($serviceId) && array_key_exists((int) $serviceId, $nodesGroup)) {
-                $serviceNodeGroup = $nodesGroup[(int) $serviceId];
-            } elseif (array_key_exists((string) $serviceId, $nodesGroup)) {
-                $serviceNodeGroup = $nodesGroup[(string) $serviceId];
-            }
-
-            if (is_array($serviceNodeGroup)) {
-                $rawNodeList = null;
-                if (array_key_exists($nodeId, $serviceNodeGroup)) {
-                    $rawNodeList = $serviceNodeGroup[$nodeId];
-                }
-
-                if (is_array($rawNodeList)) {
-                    $nodeList = $rawNodeList;
-                }
-            }
+            $rawNodeList = $nodesGroup[$nodeId] ?? [];
+            $nodeList = is_array($rawNodeList) ? $rawNodeList : [];
         }
 
         // 3. Combine and Deduplicate preserving order (node-level precedence)

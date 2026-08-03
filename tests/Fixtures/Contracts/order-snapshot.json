@@ -1,0 +1,32 @@
+{
+  "version": "1",
+  "mode": "prod",
+  "built_at": "2026-08-03T12:00:00.000Z",
+  "product_id": "social-campaign",
+  "definition_schema_version": "1",
+  "selection": {
+    "filter_id": "instagram",
+    "trigger_ids": ["premium", "fast-delivery"],
+    "fields": [{"field_id": "package", "field_type": "select", "selected_option_ids": ["premium"]}]
+  },
+  "inputs": {"form": {"target_url": "https://example.com/post/1"}, "selections": {"package": ["premium"]}},
+  "quantity": 1000,
+  "quantity_source": {
+    "kind": "field_rule",
+    "node_id": "quantity",
+    "rule": {"value_by": "value", "clamp": {"min": 100, "max": 10000}},
+    "defaulted_from_host": false
+  },
+  "min": 100,
+  "max": 10000,
+  "service_ids": [101],
+  "service_ids_by_node": {"premium": [101]},
+  "fallbacks": {"global": {"101": [102]}},
+  "utilities": [{
+    "node_id": "fast-delivery", "mode": "percent", "rate": 10,
+    "percent_base": "service_total", "label": "Fast delivery",
+    "inputs": {"quantity": 1000, "value": null, "value_by": null, "base_amount": 25},
+    "advisory_amount": 2.5
+  }],
+  "meta": {"checkout_session": "session-1"}
+}

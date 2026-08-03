@@ -165,16 +165,25 @@ use Elqora\Dgp\Snapshots\OrderSnapshot;
 $snapshot = OrderSnapshot::fromArray([
     'version' => '1',
     'mode' => 'prod',
-    'builtAt' => '2026-07-07T10:30:00.000Z',
-    'selection' => ['tag' => 'tag:instagram-likes', 'buttons' => [], 'fields' => []],
+    'built_at' => '2026-07-07T10:30:00.000Z',
+    'product_id' => 'instagram-likes',
+    'definition_schema_version' => '1',
+    'selection' => ['filter_id' => 'instagram', 'trigger_ids' => [], 'fields' => []],
     'inputs' => ['form' => ['quantity' => 1000], 'selections' => []],
     'quantity' => 1000,
-    'quantitySource' => ['kind' => 'fixed'],
+    'quantity_source' => [
+        'kind' => 'host_default',
+        'node_id' => null,
+        'rule' => null,
+        'defaulted_from_host' => true,
+    ],
     'min' => 100,
     'max' => 10000,
-    'services' => [101, 103],
-    'serviceMap' => ['option:quality-ultra' => [103]],
+    'service_ids' => [101, 103],
+    'service_ids_by_node' => ['option:quality-ultra' => [103]],
+    'fallbacks' => null,
     'utilities' => [],
+    'meta' => [],
 ]);
 
 $quantity = $snapshot->quantity();

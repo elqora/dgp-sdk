@@ -5,97 +5,70 @@ namespace Elqora\Dgp\Snapshots;
 final class OrderSnapshotValidator
 {
     /**
-     * Validate the standalone serialized snapshot payload.
-     *
      * @param array<string, mixed> $payload
-     * @return array<string, string> Key: field path, Value: error message
+     * @return array<string, string>
      */
     public static function validate(array $payload): array
     {
         $errors = [];
+        self::exactKeys($payload, [
+            'version', 'mode', 'built_at', 'product_id', 'definition_schema_version',
+            'selection', 'inputs', 'quantity', 'quantity_source', 'min', 'max',
+            'service_ids', 'service_ids_by_node', 'fallbacks', 'utilities', 'meta',
+        ], '', $errors);
 
-        // version check
-        if (!isset($payload['version']) || $payload['version'] !== '1') {
-            $errors['version'] = 'Version must be "1".';
-        }
+        if (($payload['version'] ?? null) !== '1') $errors['version'] = 'Version must be "1".';
+        if (!in_array($payload['mode'] ?? null, ['prod', 'dev'], true)) $errors['mode'] = 'Mode must be "prod" or "dev".';
+        if (!is_string($payload['built_at'] ?? null) || strtotime($payload['built_at']) === false) $errors['built_at'] = 'Built_at must be a date-time string.';
+        if (!is_string($payload['product_id'] ?? null) && !is_int($payload['product_id'] ?? null)) $errors['product_id'] = 'Product_id must be a string or integer.';
+        if (($payload['definition_schema_version'] ?? null) !== '1') $errors['definition_schema_version'] = 'Definition_schema_version must be "1".';
 
-        // mode check
-        if (!isset($payload['mode']) || !in_array($payload['mode'], ['prod', 'dev'], true)) {
-            $errors['mode'] = 'Mode must be "prod" or "dev".';
-        }
-
-        // builtAt check
-        if (!isset($payload['builtAt']) && !isset($payload['built_at'])) {
-            $errors['builtAt'] = 'BuiltAt timestamp is required.';
-        }
-
-        // selection check
-        if (!isset($payload['selection']) || !is_array($payload['selection'])) {
-            $errors['selection'] = 'Selection is required and must be an array.';
+        $selection = $payload['selection'] ?? null;
+        if (!is_array($selection)) {
+            $errors['selection'] = 'Selection must be an object representation.';
         } else {
-            $sel = $payload['selection'];
-            if (!isset($sel['tag']) || !is_string($sel['tag'])) {
-                $errors['selection.tag'] = 'Selection tag is required and must be a string.';
-            }
-            if (isset($sel['buttons']) && !is_array($sel['buttons'])) {
-                $errors['selection.buttons'] = 'Selection buttons must be an array.';
-            }
-            if (isset($sel['fields']) && !is_array($sel['fields'])) {
-                $errors['selection.fields'] = 'Selection fields must be an array.';
-            }
-        }
-
-        // inputs check
-        if (!isset($payload['inputs']) || !is_array($payload['inputs'])) {
-            $errors['inputs'] = 'Inputs is required and must be an array.';
-        } else {
-            $inputs = $payload['inputs'];
-            if (isset($inputs['form']) && !is_array($inputs['form'])) {
-                $errors['inputs.form'] = 'Inputs form must be an array.';
-            }
-            if (isset($inputs['selections']) && !is_array($inputs['selections'])) {
-                $errors['inputs.selections'] = 'Inputs selections must be an array.';
+            self::exactKeys($selection, ['filter_id', 'trigger_ids', 'fields'], 'selection', $errors);
+            if (!is_string($selection['filter_id'] ?? null)) $errors['selection.filter_id'] = 'Filter_id must be a string.';
+            if (!is_array($selection['trigger_ids'] ?? null)) $errors['selection.trigger_ids'] = 'Trigger_ids must be an array.';
+            if (!is_array($selection['fields'] ?? null)) {
+                $errors['selection.fields'] = 'Fields must be an array.';
+            } else {
+                foreach ($selection['fields'] as $index => $field) {
+                    if (!is_array($field)) { $errors["selection.fields.{$index}"] = 'Field selection must be an object representation.'; continue; }
+                    self::exactKeys($field, ['field_id', 'field_type', 'selected_option_ids'], "selection.fields.{$index}", $errors);
+                }
             }
         }
 
-        // quantity check
-        if (!isset($payload['quantity']) || !is_numeric($payload['quantity'])) {
-            $errors['quantity'] = 'Quantity is required and must be numeric.';
-        }
+        $inputs = $payload['inputs'] ?? null;
+        if (!is_array($inputs)) $errors['inputs'] = 'Inputs must be an object representation.';
+        else self::exactKeys($inputs, ['form', 'selections'], 'inputs', $errors);
 
-        // quantitySource check
-        if (!isset($payload['quantitySource']) && !isset($payload['quantity_source'])) {
-            $errors['quantitySource'] = 'QuantitySource is required.';
-        } else {
-            $qs = $payload['quantitySource'] ?? $payload['quantity_source'];
-            if (!is_array($qs) || !isset($qs['kind']) || !is_string($qs['kind'])) {
-                $errors['quantitySource.kind'] = 'QuantitySource kind is required and must be a string.';
-            }
-        }
+        if (!is_int($payload['quantity'] ?? null) && !is_float($payload['quantity'] ?? null)) $errors['quantity'] = 'Quantity must be numeric.';
+        $source = $payload['quantity_source'] ?? null;
+        if (!is_array($source)) $errors['quantity_source'] = 'Quantity_source must be an object representation.';
+        else self::exactKeys($source, ['kind', 'node_id', 'rule', 'defaulted_from_host'], 'quantity_source', $errors);
 
-        // min and max checks
-        $min = $payload['min'] ?? null;
-        $max = $payload['max'] ?? null;
-        if ($min !== null && !is_numeric($min)) {
-            $errors['min'] = 'Min must be numeric.';
-        }
-        if ($max !== null && !is_numeric($max)) {
-            $errors['max'] = 'Max must be numeric.';
-        }
-        if (is_numeric($min) && is_numeric($max) && $min > $max) {
-            $errors['min'] = 'Min cannot be greater than Max.';
-        }
-
-        // services check
-        if (isset($payload['services']) && !is_array($payload['services'])) {
-            $errors['services'] = 'Services must be an array.';
-        }
-
-        // serviceMap check
-        if (isset($payload['serviceMap']) && !is_array($payload['serviceMap']) && isset($payload['service_map']) && !is_array($payload['service_map'])) {
-            $errors['serviceMap'] = 'ServiceMap must be an array.';
-        }
+        foreach (['min', 'max'] as $key) if (!is_int($payload[$key] ?? null)) $errors[$key] = ucfirst($key).' must be an integer.';
+        if (is_int($payload['min'] ?? null) && is_int($payload['max'] ?? null) && $payload['min'] > $payload['max']) $errors['min'] = 'Min cannot exceed max.';
+        foreach (['service_ids', 'service_ids_by_node', 'utilities', 'meta'] as $key) if (!is_array($payload[$key] ?? null)) $errors[$key] = ucfirst($key).' must be an array representation.';
+        if (($payload['fallbacks'] ?? null) !== null && !is_array($payload['fallbacks'])) $errors['fallbacks'] = 'Fallbacks must be null or an object representation.';
 
         return $errors;
+    }
+
+    /**
+     * @param array<string, mixed> $value
+     * @param list<string> $expected
+     * @param array<string, string> $errors
+     */
+    private static function exactKeys(array $value, array $expected, string $path, array &$errors): void
+    {
+        $missing = array_diff($expected, array_keys($value));
+        $unknown = array_diff(array_keys($value), $expected);
+        if ($missing !== [] || $unknown !== []) {
+            $key = $path === '' ? '$' : $path;
+            $errors[$key] = sprintf('Wire keys differ from the v1 contract; missing [%s], unknown [%s].', implode(', ', $missing), implode(', ', $unknown));
+        }
     }
 }

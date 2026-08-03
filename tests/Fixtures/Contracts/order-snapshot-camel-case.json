@@ -1,0 +1,9 @@
+{
+  "version": "1", "mode": "prod", "builtAt": "2026-08-03T12:00:00.000Z",
+  "product_id": "social-campaign", "definition_schema_version": "1",
+  "selection": {"filter_id": "instagram", "trigger_ids": [], "fields": []},
+  "inputs": {"form": {}, "selections": {}}, "quantity": 1,
+  "quantity_source": {"kind": "host_default", "node_id": null, "rule": null, "defaulted_from_host": true},
+  "min": 1, "max": 1, "service_ids": [], "service_ids_by_node": {},
+  "fallbacks": null, "utilities": [], "meta": {}
+}

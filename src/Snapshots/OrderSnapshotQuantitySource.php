@@ -12,9 +12,9 @@ final readonly class OrderSnapshotQuantitySource implements Arrayable, JsonSeria
      */
     public function __construct(
         public string $kind,
-        public ?string $id = null,
+        public ?string $nodeId,
         public ?array $rule = null,
-        public ?bool $defaultedFromHost = null,
+        public bool $defaultedFromHost = false,
     ) {}
 
     /**
@@ -24,9 +24,9 @@ final readonly class OrderSnapshotQuantitySource implements Arrayable, JsonSeria
     {
         return [
             'kind' => $this->kind,
-            'id' => $this->id,
+            'node_id' => $this->nodeId,
             'rule' => $this->rule,
-            'defaultedFromHost' => $this->defaultedFromHost,
+            'defaulted_from_host' => $this->defaultedFromHost,
         ];
     }
 

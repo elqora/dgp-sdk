@@ -8,12 +8,12 @@ use JsonSerializable;
 final readonly class OrderSnapshotSelection implements Arrayable, JsonSerializable
 {
     /**
-     * @param list<string> $buttons
+     * @param list<string> $triggerIds
      * @param list<OrderSnapshotFieldSelection> $fields
      */
     public function __construct(
-        public string $tag,
-        public array $buttons = [],
+        public string $filterId,
+        public array $triggerIds = [],
         public array $fields = [],
     ) {}
 
@@ -23,8 +23,8 @@ final readonly class OrderSnapshotSelection implements Arrayable, JsonSerializab
     public function toArray(): array
     {
         return [
-            'tag' => $this->tag,
-            'buttons' => $this->buttons,
+            'filter_id' => $this->filterId,
+            'trigger_ids' => $this->triggerIds,
             'fields' => array_map(fn ($f) => $f->toArray(), $this->fields),
         ];
     }

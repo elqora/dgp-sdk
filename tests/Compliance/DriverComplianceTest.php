@@ -642,103 +642,49 @@ class DriverComplianceTest extends TestCase
 
     public function testOrderSnapshotRoundTripFixture(): void
     {
-        $snapshotJson = '{
-            "version": "1",
-            "mode": "prod",
-            "builtAt": "2026-07-07T10:30:00.000Z",
-            "selection": {
-                "tag": "tag:instagram-likes",
-                "buttons": ["field:premium", "option:quality-ultra"],
-                "fields": [
-                    {"id": "field:premium", "type": "toggle"},
-                    {"id": "field:quality", "type": "select", "selectedOptions": ["option:quality-ultra"]},
-                    {"id": "field:quantity", "type": "number"}
-                ]
-            },
-            "inputs": {
-                "form": {
-                    "quality": "option:quality-ultra",
-                    "quantity": 1000
-                },
-                "selections": {
-                    "field:quality": ["option:quality-ultra"]
-                }
-            },
-            "quantity": 1000,
-            "quantitySource": {
-                "kind": "field",
-                "id": "field:quantity",
-                "rule": {
-                    "valueBy": "value",
-                    "clamp": {"min": 100, "max": 10000}
-                }
-            },
-            "min": 100,
-            "max": 10000,
-            "services": [101, 103],
-            "serviceMap": {
-                "tag:instagram-likes": [101],
-                "option:quality-ultra": [103]
-            },
-            "fallbacks": {
-                "global": {
-                    "103": [106]
-                }
-            },
-            "utilities": [],
-            "meta": {
-                "schema_version": "1",
-                "workspaceId": "workspace:instagram",
-                "builder": {
-                    "commit": "commit:abc123"
-                }
-            }
-        }';
-
-        $payload = json_decode($snapshotJson, true);
+        $payload = json_decode((string) file_get_contents(__DIR__.'/../Fixtures/Contracts/order-snapshot.json'), true);
         $snapshot = OrderSnapshot::fromArray($payload);
 
         $this->assertEquals('1', $snapshot->version());
         $this->assertEquals('prod', $snapshot->mode());
-        $this->assertEquals('tag:instagram-likes', $snapshot->tag());
+        $this->assertEquals('instagram', $snapshot->filterId());
+        $this->assertEquals('social-campaign', $snapshot->productId());
         $this->assertEquals(1000, $snapshot->quantity());
-        $this->assertEquals('field', $snapshot->quantitySource()->kind);
+        $this->assertEquals('field_rule', $snapshot->quantitySource()->kind);
         $this->assertEquals(100, $snapshot->min());
         $this->assertEquals(10000, $snapshot->max());
-        $this->assertContains(101, $snapshot->services());
-        $this->assertEquals([103], $snapshot->servicesForNode('option:quality-ultra'));
+        $this->assertContains(101, $snapshot->serviceIds());
+        $this->assertEquals([101], $snapshot->servicesForNode('premium'));
 
         $serialized = Hydrator::serialize($snapshot);
-        $this->assertEquals($payload['builtAt'], $serialized['builtAt']);
-        $this->assertEquals($payload['quantitySource']['kind'], $serialized['quantitySource']['kind']);
+        $this->assertEquals($payload, $serialized);
     }
 
     public function testOrderSnapshotFallbackLookup(): void
     {
         $payload = [
             'version' => '1',
-            'mode' => 'test',
-            'builtAt' => '2026-07-07T10:30:00.000Z',
-            'selection' => ['tag' => 'tag:instagram-likes', 'buttons' => [], 'fields' => []],
+            'mode' => 'prod',
+            'built_at' => '2026-07-07T10:30:00.000Z',
+            'product_id' => 'product',
+            'definition_schema_version' => '1',
+            'selection' => ['filter_id' => 'instagram', 'trigger_ids' => [], 'fields' => []],
             'inputs' => ['form' => [], 'selections' => []],
             'quantity' => 100,
-            'quantitySource' => ['kind' => 'fixed'],
+            'quantity_source' => ['kind' => 'host_default', 'node_id' => null, 'rule' => null, 'defaulted_from_host' => true],
             'min' => 100,
             'max' => 10000,
-            'services' => [101, 103],
-            'serviceMap' => [],
+            'service_ids' => [101, 103],
+            'service_ids_by_node' => [],
             'utilities' => [],
             'fallbacks' => [
                 'global' => [
                     103 => [106, '108'],
                     'tag:instagram-likes' => ['tag:inst-fallback'],
                 ],
-                'nodes' => [
-                    103 => [
-                        'option:ultra' => [104, 106],
-                    ]
-                ]
-            ]
+                'nodes' => ['option:ultra' => [104, 106]]
+            ],
+            'meta' => [],
         ];
 
         $snapshot = OrderSnapshot::fromArray($payload);
@@ -829,6 +775,17 @@ class DriverComplianceTest extends TestCase
         $this->assertArrayHasKey('name', $missingIdentityErrors);
     }
 
+    public function testOrderSnapshotRejectsLegacyCamelCaseWireKeys(): void
+    {
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__.'/../Fixtures/Contracts/order-snapshot-camel-case.json'),
+            true,
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        OrderSnapshot::fromArray($payload);
+    }
+
     public function testProductDefinitionHydrationPreservesWireShape(): void
     {
         $data = [
@@ -877,30 +834,10 @@ class DriverComplianceTest extends TestCase
 
     public function testInitializeRequestRoundTripAndContext(): void
     {
-        $snapshotJson = '{
-            "version": "1",
-            "mode": "test",
-            "builtAt": "2026-07-07T10:30:00.000Z",
-            "selection": {
-                "tag": "tag:instagram-likes",
-                "buttons": [],
-                "fields": []
-            },
-            "inputs": {
-                "form": {},
-                "selections": {}
-            },
-            "quantity": 100,
-            "quantitySource": {
-                "kind": "fixed"
-            },
-            "min": 100,
-            "max": 10000,
-            "services": [],
-            "serviceMap": {},
-            "utilities": []
-        }';
-        $snapshot = OrderSnapshot::fromArray(json_decode($snapshotJson, true));
+        $snapshot = OrderSnapshot::fromArray(json_decode(
+            (string) file_get_contents(__DIR__.'/../Fixtures/Contracts/order-snapshot.json'),
+            true,
+        ));
 
         $request = new InitializeRequest(
             orderId: 123,

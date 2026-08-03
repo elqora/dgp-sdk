@@ -8,12 +8,12 @@ use JsonSerializable;
 final readonly class OrderSnapshotFieldSelection implements Arrayable, JsonSerializable
 {
     /**
-     * @param list<string>|null $selectedOptions
+     * @param list<string> $selectedOptionIds
      */
     public function __construct(
-        public string $id,
-        public string $type,
-        public ?array $selectedOptions = null,
+        public string $fieldId,
+        public string $fieldType,
+        public array $selectedOptionIds = [],
     ) {}
 
     /**
@@ -22,9 +22,9 @@ final readonly class OrderSnapshotFieldSelection implements Arrayable, JsonSeria
     public function toArray(): array
     {
         return [
-            'id' => $this->id,
-            'type' => $this->type,
-            'selectedOptions' => $this->selectedOptions,
+            'field_id' => $this->fieldId,
+            'field_type' => $this->fieldType,
+            'selected_option_ids' => $this->selectedOptionIds,
         ];
     }
 
