@@ -10,6 +10,32 @@ The package is intentionally framework-neutral. It defines protocol shapes, DTOs
 composer require elqora/dgp-sdk
 ```
 
+## Optional shadcn/ui Registry
+
+This repository also contains a custom [shadcn/ui registry](https://ui.shadcn.com/docs/registry) with optional React and Tailwind components for presenting DGP runtime state. It includes client-facing plan and delivery views, admin/operator views, status badges, action controls, segmented progress, and shared TypeScript DTO types.
+
+The registry is a host-rendering convenience layer, not part of the Composer package or the framework-neutral PHP runtime. Hosts remain responsible for choosing, installing, adapting, and rendering these components.
+
+- `registry.json` declares the `dgp-sdk` registry item and its dependencies.
+- `registry/dgp-sdk` contains the registry source files.
+- `playground` provides the local interactive preview.
+
+To run the registry playground locally:
+
+```bash
+npm install
+npm run dev
+```
+
+Validate or build the frontend assets with:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+The repository does not currently publish a stable hosted registry endpoint. Consumers should use the registry source directly until an installation URL is documented.
+
 ## Responsibility Split
 
 The SDK defines:
