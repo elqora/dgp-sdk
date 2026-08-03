@@ -1,0 +1,8 @@
+{
+  "id": "dripfeed",
+  "enabled": true,
+  "description": "Supports scheduled incremental delivery.",
+  "meta": {
+    "maximum_batches": 12
+  }
+}

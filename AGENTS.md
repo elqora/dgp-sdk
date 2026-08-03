@@ -29,9 +29,9 @@ DGP v1 conformance does not require legacy adapters, aliases, deprecated fields,
 
 - Start SDK-owned domain changes here and coordinate any shared wire impact with Spec. After ratification, align SDK serialization alongside corresponding Core work before dependent releases.
 - Commit and release this repository independently.
-- The current PHP toolchain is real: install with `composer install`; run tests with `composer test`, static analysis with `composer analyse`, and the full completion check with `composer check`.
-- No generated protocol-binding command or committed-output policy exists yet. Do not invent one; document it when Spec integration introduces it.
-- Add mechanical conformance and boundary checks with that integration, including fixture conformance, forbidden frontend dependencies, and canonical-field drift.
+- The current PHP toolchain is real: install with `composer install`; run tests with `composer test`, static analysis with `composer analyse`, contract and dependency drift checks with `composer check:contracts`, and the full completion check with `composer check`.
+- Spec conformance fixtures under `tests/Fixtures/Contracts` are committed interoperability evidence. `composer check:contracts` verifies their JSON and compares them with a sibling `dgp-spec` checkout when one is present.
+- No generated PHP protocol binding exists. The SDK's DTOs remain hand-authored language bindings and their fixture round trips mechanically guard canonical-field drift.
 
 ## References
 

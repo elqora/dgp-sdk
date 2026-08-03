@@ -21,13 +21,27 @@ final class Hydrator
      */
     public static function hydrate(string $class, mixed $data): object
     {
+        if ($class === \Elqora\Dgp\Catalog\Services\HandlerService::class) {
+            self::assertHandlerServiceWireData($data);
+        }
+
+        if ($class === \Elqora\Dgp\Catalog\Services\ServiceCapability::class) {
+            self::assertExactWireKeys($class, $data, ['id', 'enabled', 'description', 'meta']);
+            if (!is_array($data['meta'])) {
+                throw new InvalidArgumentException('ServiceCapability meta must be a non-null JSON object representation.');
+            }
+        }
+
         if ($class === \Elqora\Dgp\Catalog\Services\ServiceCapabilitySet::class) {
             if (!is_array($data)) {
                 throw new InvalidArgumentException('Service capability set data must be an array.');
             }
 
             $capabilities = [];
-            foreach ($data as $capability) {
+            foreach ($data as $key => $capability) {
+                if (is_string($key) && is_array($capability) && ($capability['id'] ?? null) !== $key) {
+                    throw new InvalidArgumentException("Service capability key '{$key}' must match its id.");
+                }
                 $capabilities[] = self::hydrate(\Elqora\Dgp\Catalog\Services\ServiceCapability::class, $capability);
             }
 
@@ -239,6 +253,65 @@ final class Hydrator
         }
 
         return $value;
+    }
+
+    private static function assertHandlerServiceWireData(mixed $data): void
+    {
+        $class = \Elqora\Dgp\Catalog\Services\HandlerService::class;
+        self::assertExactWireKeys($class, $data, [
+            'id',
+            'name',
+            'description',
+            'category',
+            'rate',
+            'min',
+            'max',
+            'capabilities',
+            'meta',
+            'state',
+            'state_reason',
+        ]);
+
+        if (!is_array($data['capabilities'])) {
+            throw new InvalidArgumentException('HandlerService capabilities must be a JSON object representation.');
+        }
+        foreach ($data['capabilities'] as $key => $capability) {
+            self::assertExactWireKeys(\Elqora\Dgp\Catalog\Services\ServiceCapability::class, $capability, [
+                'id',
+                'enabled',
+                'description',
+                'meta',
+            ]);
+            if (!is_string($key) || $capability['id'] !== $key) {
+                throw new InvalidArgumentException('Each HandlerService capability key must match its id.');
+            }
+            if (!is_array($capability['meta'])) {
+                throw new InvalidArgumentException('ServiceCapability meta must be a non-null JSON object representation.');
+            }
+        }
+        if (!is_array($data['meta'])) {
+            throw new InvalidArgumentException('HandlerService meta must be a JSON object representation.');
+        }
+    }
+
+    /** @param list<string> $expectedKeys */
+    private static function assertExactWireKeys(string $class, mixed $data, array $expectedKeys): void
+    {
+        if (!is_array($data)) {
+            throw new InvalidArgumentException("{$class} wire data must be an array representation of a JSON object.");
+        }
+
+        $actualKeys = array_keys($data);
+        $missing = array_values(array_diff($expectedKeys, $actualKeys));
+        $unknown = array_values(array_diff($actualKeys, $expectedKeys));
+        if ($missing !== [] || $unknown !== []) {
+            throw new InvalidArgumentException(sprintf(
+                '%s wire keys differ from the ratified contract; missing [%s], unknown [%s].',
+                $class,
+                implode(', ', $missing),
+                implode(', ', $unknown),
+            ));
+        }
     }
 
     private static function hydrateUnionValue(ReflectionUnionType $type, mixed $value): mixed

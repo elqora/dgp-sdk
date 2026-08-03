@@ -187,7 +187,8 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals(100, $serialized['min']);
         $this->assertEquals(10000, $serialized['max']);
         $this->assertTrue($serialized['capabilities']['refill']['enabled']);
-        $this->assertEquals('global', $serialized['meta']['derived']['region']);
+        $this->assertEquals('global', $serialized['meta']['region']);
+        $this->assertEquals('101', $serialized['meta']['provider_payload']['id']);
 
         $hydrated = Hydrator::hydrate(HandlerService::class, $serialized);
         $this->assertTrue(Hydrator::compare($service, $hydrated));
@@ -195,7 +196,7 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals('global', $hydrated->meta->getAny('region'));
     }
 
-    public function testHandlerServiceLegacyConstructorInputStillWorks(): void
+    public function testHandlerServiceArrayConstructorInputIsNormalized(): void
     {
         $service = new HandlerService(
             id: 101,
@@ -771,11 +772,20 @@ class DriverComplianceTest extends TestCase
             'fields' => [
                 ['id' => 'field:premium', 'type' => 'toggle', 'label' => 'Premium']
             ],
+            'order_for_tags' => [],
+            'includes_for_buttons' => [],
+            'excludes_for_buttons' => [],
             'option_effects_for_buttons' => [
                 'field:premium' => [
-                    'field:premium' => ['forceVisible' => true]
+                    'field:premium' => ['force_visible' => true]
                 ]
-            ]
+            ],
+            'value_effects_for_triggers' => [],
+            'schema_version' => '1',
+            'fallbacks' => null,
+            'description' => null,
+            'notices' => [],
+            'meta' => [],
         ];
 
         $errors = ProductDefinitionValidator::validate($validDefinition);
@@ -791,11 +801,20 @@ class DriverComplianceTest extends TestCase
             'fields' => [
                 ['id' => 'field:premium', 'type' => 'toggle', 'label' => 'Premium']
             ],
+            'order_for_tags' => [],
+            'includes_for_buttons' => [],
+            'excludes_for_buttons' => [],
             'option_effects_for_buttons' => [
                 'field:missing-trigger' => [
-                    'field:premium' => ['forceVisible' => true]
+                    'field:premium' => ['force_visible' => true]
                 ]
-            ]
+            ],
+            'value_effects_for_triggers' => [],
+            'schema_version' => '1',
+            'fallbacks' => null,
+            'description' => null,
+            'notices' => [],
+            'meta' => [],
         ];
 
         $errors = ProductDefinitionValidator::validate($invalidDefinition);
@@ -826,7 +845,7 @@ class DriverComplianceTest extends TestCase
             'excludes_for_buttons' => [],
             'option_effects_for_buttons' => [
                 'field:premium' => [
-                    'field:premium' => ['forceVisible' => true],
+                    'field:premium' => ['force_visible' => true],
                 ],
             ],
             'value_effects_for_triggers' => [],

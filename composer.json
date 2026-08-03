@@ -26,9 +26,11 @@
     "scripts": {
         "test": "phpunit",
         "analyse": "phpstan analyse",
+        "check:contracts": "php scripts/check-contracts.php",
         "check": [
             "@test",
             "@analyse",
+            "@check:contracts",
             "composer validate --strict"
         ]
     },

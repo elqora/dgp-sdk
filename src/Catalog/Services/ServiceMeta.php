@@ -16,33 +16,10 @@ final readonly class ServiceMeta implements Arrayable, JsonSerializable
         public array $derived = [],
     ) {}
 
-    /**
-     * @param array<string, mixed>|null $meta
-     */
+    /** @param array<string, mixed>|null $meta */
     public static function from(?array $meta): self
     {
-        if ($meta === null) {
-            return new self();
-        }
-
-        $keys = array_keys($meta);
-        $hasRaw = array_key_exists('raw', $meta);
-        $hasDerived = array_key_exists('derived', $meta);
-
-        if ($hasRaw || $hasDerived) {
-            $otherKeys = array_diff($keys, ['raw', 'derived']);
-            $rawIsArray = !$hasRaw || is_array($meta['raw']);
-            $derivedIsArray = !$hasDerived || is_array($meta['derived']);
-
-            if ($otherKeys === [] && $rawIsArray && $derivedIsArray) {
-                return new self(
-                    raw: (array) ($meta['raw'] ?? []),
-                    derived: (array) ($meta['derived'] ?? []),
-                );
-            }
-        }
-
-        return new self(derived: $meta);
+        return new self(derived: $meta ?? []);
     }
 
     public function get(string $key, string $from = 'derived', mixed $default = null): mixed
@@ -109,17 +86,14 @@ final readonly class ServiceMeta implements Arrayable, JsonSerializable
      */
     public function toArray(): array
     {
-        return [
-            'raw' => $this->raw,
-            'derived' => $this->derived,
-        ];
+        return array_replace($this->raw, $this->derived);
     }
 
     /**
-     * @return array<string, mixed>
+     * @return object
      */
-    public function jsonSerialize(): array
+    public function jsonSerialize(): object
     {
-        return $this->toArray();
+        return (object) $this->toArray();
     }
 }

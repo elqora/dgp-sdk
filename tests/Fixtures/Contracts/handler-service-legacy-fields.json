@@ -1,0 +1,19 @@
+{
+  "id": 101,
+  "name": "Legacy service",
+  "description": null,
+  "category": "delivery",
+  "rate": 12.5,
+  "min": 100,
+  "max": 10000,
+  "capabilities": {},
+  "flags": {
+    "refill": true
+  },
+  "estimates": {
+    "speed": "fast"
+  },
+  "meta": {},
+  "state": "enabled",
+  "state_reason": null
+}

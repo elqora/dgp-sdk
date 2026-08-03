@@ -701,6 +701,8 @@ $notification = new ChargePaymentNotification(
 
 Product-definition catalogs are optional. Every definition has one canonical shape regardless of whether it comes from a handler, Studio, a host, or an import. A handler declaring the `product_definition_catalog` capability implements `ProductDefinitionCatalogContract` and returns root ProductDefinition objects directly.
 
+The PHP DTO uses idiomatic constructor names and emits the canonical snake-case v1 wire keys. `meta` remains one opaque object on the wire even when `ServiceMeta` internally combines provider and host-derived values. Product fields do not have a `component` property; rendering descriptors belong to host integrations rather than `ProductDefinition`.
+
 ```php
 use Elqora\Dgp\Catalog\Schemas\Contracts\ProductDefinitionCatalogContract;
 use Elqora\Dgp\Catalog\Schemas\ProductDefinition;
@@ -846,8 +848,11 @@ class MyWebhookHandler implements WebhookContract
 ```bash
 composer test
 composer analyse
+composer check:contracts
 composer check
 ```
+
+`composer check` is the completion command. It runs the PHPUnit suite, PHPStan, Spec-fixture and dependency-boundary checks, and strict Composer validation. The committed contract fixtures are copied from `dgp-spec` v1 and are compared with a sibling Spec checkout when available.
 
 To run a specific file:
 

@@ -1,0 +1,33 @@
+{
+  "id": 101,
+  "name": "Premium delivery",
+  "description": "Fast delivery service",
+  "category": "delivery",
+  "rate": 12.5,
+  "min": 100,
+  "max": 10000,
+  "capabilities": {
+    "refill": {
+      "id": "refill",
+      "enabled": true,
+      "description": "Supports refill after completion.",
+      "meta": {}
+    },
+    "cancel": {
+      "id": "cancel",
+      "enabled": false,
+      "description": "Cancellation is unavailable.",
+      "meta": {
+        "provider_reason": "unsupported"
+      }
+    }
+  },
+  "meta": {
+    "region": "global",
+    "provider_payload": {
+      "id": "101"
+    }
+  },
+  "state": "enabled",
+  "state_reason": null
+}

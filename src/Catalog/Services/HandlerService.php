@@ -58,6 +58,18 @@ final readonly class HandlerService implements Arrayable, JsonSerializable
      */
     public function jsonSerialize(): array
     {
-        return $this->toArray();
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'description' => $this->description,
+            'category' => $this->category,
+            'rate' => $this->rate,
+            'min' => $this->min,
+            'max' => $this->max,
+            'capabilities' => $this->capabilities->jsonSerialize(),
+            'meta' => $this->meta->jsonSerialize(),
+            'state' => $this->state->value,
+            'state_reason' => $this->stateReason,
+        ];
     }
 }

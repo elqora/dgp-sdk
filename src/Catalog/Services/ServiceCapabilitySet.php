@@ -31,7 +31,7 @@ final readonly class ServiceCapabilitySet implements Arrayable, JsonSerializable
                     id: (string) ($capability['id'] ?? $key),
                     enabled: (bool) ($capability['enabled'] ?? true),
                     description: isset($capability['description']) ? (string) $capability['description'] : null,
-                    meta: is_array($capability['meta'] ?? null) ? $capability['meta'] : null,
+                    meta: is_array($capability['meta'] ?? null) ? $capability['meta'] : [],
                 );
             }
 
@@ -89,10 +89,10 @@ final readonly class ServiceCapabilitySet implements Arrayable, JsonSerializable
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return object
      */
-    public function jsonSerialize(): array
+    public function jsonSerialize(): object
     {
-        return $this->toArray();
+        return (object) $this->capabilities;
     }
 }

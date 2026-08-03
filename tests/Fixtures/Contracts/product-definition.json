@@ -1,0 +1,165 @@
+{
+  "id": "instagram-engagement",
+  "name": "Instagram Engagement",
+  "filters": [
+    {
+      "id": "tag:instagram",
+      "label": "Instagram",
+      "service_id": 101,
+      "capabilities": {
+        "refill": true,
+        "cancel": false
+      },
+      "quantity_default": 100,
+      "meta": {
+        "campaign_family": "social"
+      }
+    }
+  ],
+  "fields": [
+    {
+      "id": "field:quantity",
+      "type": "number",
+      "label": "Quantity",
+      "bind_id": "tag:instagram",
+      "name": "quantity",
+      "required": true,
+      "default_value": 100,
+      "defaults": {
+        "placeholder": "Enter a quantity"
+      },
+      "pricing_role": "base",
+      "validation": [
+        {
+          "value_by": "value",
+          "op": "gte",
+          "value": 100,
+          "code": "quantity_too_small",
+          "message": "Quantity must be at least 100."
+        }
+      ],
+      "quantity": {
+        "value_by": "eval",
+        "expression": {
+          "language": "javascript",
+          "body": "return Number(value);"
+        },
+        "clamp": {
+          "min": 100,
+          "max": 10000
+        },
+        "fallback": 100
+      },
+      "button": false,
+      "meta": {
+        "analytics_key": "quantity"
+      }
+    },
+    {
+      "id": "field:package",
+      "type": "select",
+      "label": "Package",
+      "bind_id": "tag:instagram",
+      "required": true,
+      "pricing_role": "base",
+      "options": [
+        {
+          "id": "option:premium",
+          "label": "Premium",
+          "value": "premium",
+          "service_id": 102,
+          "pricing_role": "base",
+          "quantity_default": 250,
+          "meta": {}
+        },
+        {
+          "id": "option:rush",
+          "label": "Rush processing",
+          "value": true,
+          "pricing_role": "utility",
+          "utility": {
+            "rate": 5,
+            "mode": "flat",
+            "label": "Rush processing"
+          },
+          "meta": {}
+        }
+      ],
+      "button": false,
+      "meta": {}
+    },
+    {
+      "id": "field:notes",
+      "type": "textarea",
+      "label": "Notes",
+      "bind_id": "tag:instagram",
+      "name": "notes",
+      "required": false,
+      "button": false,
+      "meta": {}
+    }
+  ],
+  "order_for_tags": {
+    "tag:instagram": [
+      "field:quantity",
+      "field:package",
+      "field:notes"
+    ]
+  },
+  "includes_for_buttons": {
+    "option:rush": [
+      "field:notes"
+    ]
+  },
+  "excludes_for_buttons": {},
+  "option_effects_for_buttons": {
+    "option:premium": {
+      "field:notes": {
+        "force_visible": true,
+        "include": [],
+        "exclude": []
+      }
+    }
+  },
+  "value_effects_for_triggers": {
+    "option:rush": {
+      "field:notes": {
+        "value": "Please prioritize this order.",
+        "mode": "if_empty",
+        "clear_on_deactivate": true
+      }
+    }
+  },
+  "schema_version": "1",
+  "fallbacks": {
+    "nodes": {
+      "option:premium": [
+        103
+      ]
+    },
+    "global": {
+      "101": [
+        104
+      ]
+    }
+  },
+  "description": "A configurable Instagram engagement product.",
+  "notices": [
+    {
+      "id": "notice:public-account",
+      "type": "public",
+      "kind": "warning",
+      "severity": "warning",
+      "target": {
+        "scope": "global"
+      },
+      "title": "Account must remain public",
+      "description": "Keep the target account public until delivery completes.",
+      "marked_at": "2026-08-03T18:00:00Z",
+      "meta": {}
+    }
+  ],
+  "meta": {
+    "source": "hand-authored-conformance-fixture"
+  }
+}

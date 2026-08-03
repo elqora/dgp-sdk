@@ -8,13 +8,13 @@ use JsonSerializable;
 final readonly class ServiceCapability implements Arrayable, JsonSerializable
 {
     /**
-     * @param array<string, mixed>|null $meta
+     * @param array<string, mixed> $meta
      */
     public function __construct(
         public string $id,
         public bool $enabled = true,
         public ?string $description = null,
-        public ?array $meta = null,
+        public array $meta = [],
     ) {}
 
     /**
@@ -35,6 +35,11 @@ final readonly class ServiceCapability implements Arrayable, JsonSerializable
      */
     public function jsonSerialize(): array
     {
-        return $this->toArray();
+        return [
+            'id' => $this->id,
+            'enabled' => $this->enabled,
+            'description' => $this->description,
+            'meta' => (object) $this->meta,
+        ];
     }
 }
