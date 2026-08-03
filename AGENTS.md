@@ -8,6 +8,8 @@ This repository is the framework-neutral PHP backend toolkit for DGP handlers. I
 
 Once Spec ratifies a contract, this SDK must conform. Divergence is a conformance defect, and the SDK must not preserve an incompatible legacy wire shape as a second authority.
 
+Ratified means the versioned schema, required fixtures, rationale, and stable status are merged into `dgp-spec/main`; released means that ratified Spec version is tagged and published. SDK conformance may target a ratified unreleased contract during coordinated work, but a stable SDK release requires the corresponding released Spec version.
+
 ## Dependencies and boundaries
 
 - Implement ratified `dgp-spec` contracts in PHP and verify them against shared conformance fixtures.
@@ -22,6 +24,14 @@ Once Spec ratifies a contract, this SDK must conform. Divergence is a conformanc
 ## Clean-break rule
 
 DGP v1 conformance does not require legacy adapters, aliases, deprecated fields, compatibility modes, or support for old frontend definitions. Existing implementation details are evidence for unratified behavior, not automatic protocol contracts.
+
+## Change workflow and operations
+
+- Align SDK conformance immediately after Spec ratification and alongside the corresponding Core work, before dependent Validation or higher-level package releases.
+- Commit and release this repository independently.
+- The current PHP toolchain is real: install with `composer install`; run tests with `composer test`, static analysis with `composer analyse`, and the full completion check with `composer check`.
+- No generated protocol-binding command or committed-output policy exists yet. Do not invent one; document it when Spec integration introduces it.
+- Add mechanical conformance and boundary checks with that integration, including fixture conformance, forbidden frontend dependencies, and canonical-field drift.
 
 ## References
 
