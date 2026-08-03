@@ -20,6 +20,15 @@ The registry is a host-rendering convenience layer, not part of the Composer pac
 - `registry/dgp-sdk` contains the registry source files.
 - `playground` provides the local interactive preview.
 
+The `dgp-sdk` registry item currently installs:
+
+- **Shared components:** `StatusBadge`, `ActionButtonGroup`, and `SegmentBar`.
+- **Client components:** `ClientDeliveryCard`, `ClientPlanCard`, and `ClientPlanViewer`.
+- **Admin components:** `AdminDeliveryCard`, `AdminPlanViewer`, and `AdminManagementViewer`.
+- **Types:** shared TypeScript DTOs for manifests, services, runtime plans, deliveries, progress, actions, charges, management, insights, audits, assets, balance, and health.
+
+The source tree also contains `ChargeIndicator`, `OrderChargeStateViewer`, `ClientChargeCard`, and `AdminChargeCard`. These charge components are exported by the source barrel but are not currently declared as files in `registry.json`, so they are not yet part of the installable registry item.
+
 To run the registry playground locally:
 
 ```bash
