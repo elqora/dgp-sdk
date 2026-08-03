@@ -5,7 +5,7 @@ namespace Elqora\Dgp\Catalog\Schemas;
 use Elqora\Dgp\Support\Arrayable;
 use JsonSerializable;
 
-final readonly class ServiceSchemaQuery implements Arrayable, JsonSerializable
+final readonly class ProductDefinitionQuery implements Arrayable, JsonSerializable
 {
     /**
      * @param array<string, mixed> $filters

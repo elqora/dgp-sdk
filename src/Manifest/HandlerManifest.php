@@ -10,7 +10,7 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
 {
     /**
      * @param list<Capability> $capabilities
-     * @param list<string> $supportedServiceSchemaVersions
+     * @param list<string> $supportedProductDefinitionVersions
      * @param list<string> $synchronizationModes
      * @param list<string> $supportedInteractionTypes
      * @param array<string, mixed> $limitations
@@ -24,7 +24,7 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
         public string $name,
         public string $version,
         public array $capabilities = [],
-        public array $supportedServiceSchemaVersions = [],
+        public array $supportedProductDefinitionVersions = [],
         public array $synchronizationModes = [],
         public bool $webhookSupport = false,
         public array $supportedInteractionTypes = [],
@@ -56,7 +56,7 @@ final readonly class HandlerManifest implements Arrayable, JsonSerializable
             'name' => $this->name,
             'version' => $this->version,
             'capabilities' => array_map(fn (Capability $c) => $c->value, $this->capabilities),
-            'supported_service_schema_versions' => $this->supportedServiceSchemaVersions,
+            'supported_product_definition_versions' => $this->supportedProductDefinitionVersions,
             'synchronization_modes' => $this->synchronizationModes,
             'webhook_support' => $this->webhookSupport,
             'supported_interaction_types' => $this->supportedInteractionTypes,

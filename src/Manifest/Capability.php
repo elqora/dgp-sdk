@@ -8,7 +8,7 @@ enum Capability: string
     case SYNCHRONIZATION = 'synchronization';
     case CHARGES = 'charges';
     case UI_CONTRIBUTIONS = 'ui_contributions';
-    case SERVICE_SCHEMA_CATALOG = 'service_schema_catalog';
+    case PRODUCT_DEFINITION_CATALOG = 'product_definition_catalog';
     case WEBHOOKS = 'webhooks';
     case PRIVATE_ASSETS = 'private_assets';
     case SERVICE_INSIGHTS = 'service_insights';

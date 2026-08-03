@@ -2,10 +2,10 @@
 
 namespace Elqora\Dgp\Catalog\Schemas;
 
-final class ServicePropsValidator
+final class ProductDefinitionValidator
 {
     /**
-     * Validate a serialized ServiceProps array.
+     * Validate a serialized ProductDefinition array.
      *
      * @param array<string, mixed> $data
      * @return array<string, string> Key: path (e.g. 'fields.0.id'), Value: error message
@@ -15,6 +15,14 @@ final class ServicePropsValidator
         $errors = [];
 
         // 1. Required fields
+        if (!isset($data['id']) || (!is_string($data['id']) && !is_int($data['id']))) {
+            $errors['id'] = 'Id is required and must be a string or integer.';
+        }
+
+        if (!isset($data['name']) || !is_string($data['name'])) {
+            $errors['name'] = 'Name is required and must be a string.';
+        }
+
         if (!isset($data['filters']) || !is_array($data['filters'])) {
             $errors['filters'] = 'Filters is a required array.';
         }

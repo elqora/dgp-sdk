@@ -5,7 +5,7 @@ namespace Elqora\Dgp\Catalog\Schemas;
 use Elqora\Dgp\Support\Arrayable;
 use JsonSerializable;
 
-final readonly class ServiceProps implements Arrayable, JsonSerializable
+final readonly class ProductDefinition implements Arrayable, JsonSerializable
 {
     /**
      * @param array<int, mixed> $filters
@@ -17,8 +17,11 @@ final readonly class ServiceProps implements Arrayable, JsonSerializable
      * @param array<string, array<string, mixed>> $valueEffectsForTriggers
      * @param array<string, mixed>|null $fallbacks
      * @param array<int, mixed> $notices
+     * @param array<string, mixed> $meta
      */
     public function __construct(
+        public string|int $id,
+        public string $name,
         public array $filters,
         public array $fields,
         public array $orderForTags = [],
@@ -28,8 +31,9 @@ final readonly class ServiceProps implements Arrayable, JsonSerializable
         public array $valueEffectsForTriggers = [],
         public ?string $schemaVersion = null,
         public ?array $fallbacks = null,
-        public ?string $name = null,
+        public ?string $description = null,
         public array $notices = [],
+        public array $meta = [],
     ) {}
 
     /**
@@ -38,6 +42,8 @@ final readonly class ServiceProps implements Arrayable, JsonSerializable
     public function toArray(): array
     {
         return [
+            'id' => $this->id,
+            'name' => $this->name,
             'filters' => $this->filters,
             'fields' => $this->fields,
             'order_for_tags' => $this->orderForTags,
@@ -47,8 +53,9 @@ final readonly class ServiceProps implements Arrayable, JsonSerializable
             'value_effects_for_triggers' => $this->valueEffectsForTriggers,
             'schema_version' => $this->schemaVersion,
             'fallbacks' => $this->fallbacks,
-            'name' => $this->name,
+            'description' => $this->description,
             'notices' => $this->notices,
+            'meta' => $this->meta,
         ];
     }
 

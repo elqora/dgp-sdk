@@ -662,17 +662,31 @@ $notification = new ChargePaymentNotification(
 );
 ```
 
-## Service Props
+## Product Definitions
 
-Service schemas are optional. When a handler provides `ServiceProps`, only `filters` and `fields` are required. Other fields such as button effects, fallbacks, notices, names, and schema versions are optional.
+Product-definition catalogs are optional. Every definition has one canonical shape regardless of whether it comes from a handler, Studio, a host, or an import. A handler declaring the `product_definition_catalog` capability implements `ProductDefinitionCatalogContract` and returns root ProductDefinition objects directly.
 
 ```php
-use Elqora\Dgp\Catalog\Schemas\ServiceProps;
+use Elqora\Dgp\Catalog\Schemas\Contracts\ProductDefinitionCatalogContract;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinition;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinitionQuery;
+use Elqora\Dgp\Errors\Result;
 
-$props = new ServiceProps(
-    filters: [['id' => 'tag:manual', 'label' => 'Manual Task']],
-    fields: [['id' => 'field:desc', 'type' => 'text', 'label' => 'Instructions']],
-);
+final class ProductCatalog implements ProductDefinitionCatalogContract
+{
+    public function definitions(ProductDefinitionQuery $query): Result
+    {
+        return Result::success([
+            new ProductDefinition(
+                id: 'manual-task-1',
+                name: 'Manual Custom Task',
+                filters: [['id' => 'tag:manual', 'label' => 'Manual Task']],
+                fields: [['id' => 'field:desc', 'type' => 'text', 'label' => 'Instructions']],
+                schemaVersion: '1',
+            ),
+        ]);
+    }
+}
 ```
 
 ## Insights

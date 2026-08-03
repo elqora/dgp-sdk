@@ -3,7 +3,7 @@
 namespace Elqora\Dgp\Tests\Fixtures\Handlers;
 
 use Elqora\Dgp\Contracts\DgpDriverContract;
-use Elqora\Dgp\Catalog\Schemas\Contracts\ServiceSchemaCatalogContract;
+use Elqora\Dgp\Catalog\Schemas\Contracts\ProductDefinitionCatalogContract;
 use Elqora\Dgp\Manifest\HandlerManifest;
 use Elqora\Dgp\Manifest\Capability;
 use Elqora\Dgp\Health\HandlerHealth;
@@ -18,9 +18,8 @@ use Elqora\Dgp\Money\Currency;
 use Elqora\Dgp\Errors\Result;
 use Elqora\Dgp\Catalog\Services\ServiceQuery;
 use Elqora\Dgp\Catalog\Services\HandlerService;
-use Elqora\Dgp\Catalog\Schemas\ServiceSchemaQuery;
-use Elqora\Dgp\Catalog\Schemas\ServiceSchemaDefinition;
-use Elqora\Dgp\Catalog\Schemas\ServiceProps;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinitionQuery;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinition;
 use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\PrepareRequest;
 use Elqora\Dgp\Runtime\PreparationResult;
@@ -45,7 +44,7 @@ use Elqora\Dgp\Bulk\RefreshBulkRequest;
 use Elqora\Dgp\Bulk\RetryBulkRequest;
 use Elqora\Dgp\Bulk\StartBulkRequest;
 
-class ManualTestHandler implements DgpDriverContract, ServiceSchemaCatalogContract
+class ManualTestHandler implements DgpDriverContract, ProductDefinitionCatalogContract
 {
     public function manifest(): Result
     {
@@ -54,9 +53,10 @@ class ManualTestHandler implements DgpDriverContract, ServiceSchemaCatalogContra
             name: 'Manual Test Handler',
             version: '1.0.0',
             capabilities: [
-                Capability::SERVICE_SCHEMA_CATALOG,
+                Capability::PRODUCT_DEFINITION_CATALOG,
                 Capability::CHARGES,
-            ]
+            ],
+            supportedProductDefinitionVersions: ['1'],
         );
         return Result::success($manifest);
     }
@@ -121,25 +121,21 @@ class ManualTestHandler implements DgpDriverContract, ServiceSchemaCatalogContra
     }
 
     /**
-     * @param ServiceSchemaQuery $query
-     * @return Result<list<ServiceSchemaDefinition>>
+     * @param ProductDefinitionQuery $query
+     * @return Result<list<ProductDefinition>>
      */
-    public function schemas(ServiceSchemaQuery $query): Result
+    public function definitions(ProductDefinitionQuery $query): Result
     {
-        $props = new ServiceProps(
-            filters: [['id' => 'tag:manual', 'label' => 'Manual Task']],
-            fields: [['id' => 'field:desc', 'type' => 'text', 'label' => 'Instructions']]
-        );
-
-        $schema = new ServiceSchemaDefinition(
+        $definition = new ProductDefinition(
             id: 'manual-task-1',
             name: 'Manual Custom Task',
-            props: $props,
-            schemaVersion: '1'
+            filters: [['id' => 'tag:manual', 'label' => 'Manual Task']],
+            fields: [['id' => 'field:desc', 'type' => 'text', 'label' => 'Instructions']],
+            schemaVersion: '1',
         );
 
-        /** @var list<ServiceSchemaDefinition> $list */
-        $list = [$schema];
+        /** @var list<ProductDefinition> $list */
+        $list = [$definition];
         return Result::success($list);
     }
 

@@ -24,7 +24,8 @@ use Elqora\Dgp\Tests\Fixtures\Handlers\PaymentNotificationTestHandler;
 use Elqora\Dgp\Manifest\Capability;
 use Elqora\Dgp\Manifest\HandlerManifest;
 use Elqora\Dgp\Manifest\ScoreboardItemDefinition;
-use Elqora\Dgp\Catalog\Schemas\Contracts\ServiceSchemaCatalogContract;
+use Elqora\Dgp\Catalog\Schemas\Contracts\ProductDefinitionCatalogContract;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinitionQuery;
 use Elqora\Dgp\Ui\Contracts\UiManifestContract;
 use Elqora\Dgp\Events\Contracts\WebhookContract;
 use Elqora\Dgp\Assets\Contracts\PrivateAssetContract;
@@ -38,8 +39,10 @@ use Elqora\Dgp\Deliveries\InitializationDelivery;
 use Elqora\Dgp\Deliveries\FulfillmentDelivery;
 use Elqora\Dgp\Deliveries\DeliveryStatus;
 use Elqora\Dgp\Snapshots\OrderSnapshot;
-use Elqora\Dgp\Catalog\Schemas\ServiceProps;
-use Elqora\Dgp\Catalog\Schemas\ServicePropsValidator;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinition;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinitionExtractor;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinitionHydrator;
+use Elqora\Dgp\Catalog\Schemas\ProductDefinitionValidator;
 use Elqora\Dgp\Runtime\InitializeRequest;
 use Elqora\Dgp\Runtime\StartRequest;
 use Elqora\Dgp\Runtime\RuntimeContext;
@@ -122,10 +125,10 @@ class DriverComplianceTest extends TestCase
         $capabilities = $manifest->capabilities;
 
         // Check optional contract vs capability rules
-        if (in_array(Capability::SERVICE_SCHEMA_CATALOG, $capabilities, true)) {
-            $this->assertInstanceOf(ServiceSchemaCatalogContract::class, $handler);
+        if (in_array(Capability::PRODUCT_DEFINITION_CATALOG, $capabilities, true)) {
+            $this->assertInstanceOf(ProductDefinitionCatalogContract::class, $handler);
         } else {
-            $this->assertNotInstanceOf(ServiceSchemaCatalogContract::class, $handler);
+            $this->assertNotInstanceOf(ProductDefinitionCatalogContract::class, $handler);
         }
 
         if (in_array(Capability::UI_CONTRIBUTIONS, $capabilities, true)) {
@@ -145,8 +148,16 @@ class DriverComplianceTest extends TestCase
 
         $capabilities = $manifest->capabilities;
 
-        $this->assertContains(Capability::SERVICE_SCHEMA_CATALOG, $capabilities);
-        $this->assertInstanceOf(ServiceSchemaCatalogContract::class, $handler);
+        $this->assertContains(Capability::PRODUCT_DEFINITION_CATALOG, $capabilities);
+        $this->assertInstanceOf(ProductDefinitionCatalogContract::class, $handler);
+
+        $serializedManifest = $manifest->toArray();
+        $this->assertContains('product_definition_catalog', $serializedManifest['capabilities']);
+        $this->assertSame(['1'], $serializedManifest['supported_product_definition_versions']);
+
+        $definitions = $handler->definitions(new ProductDefinitionQuery())->value();
+        $this->assertCount(1, $definitions);
+        $this->assertInstanceOf(ProductDefinition::class, $definitions[0]);
     }
 
     public function testHandlerServiceRoundTripAndCapabilityUpgrade(): void
@@ -748,10 +759,12 @@ class DriverComplianceTest extends TestCase
         $this->assertEquals([106, 108], $snapshot->fallbacksFor('103'));
     }
 
-    public function testServicePropsValidationInvariant(): void
+    public function testProductDefinitionValidationInvariant(): void
     {
-        // Valid ServiceProps structure
-        $validProps = [
+        // Valid ProductDefinition structure
+        $validDefinition = [
+            'id' => 'instagram-product',
+            'name' => 'Instagram Product',
             'filters' => [
                 ['id' => 'tag:instagram', 'label' => 'Instagram']
             ],
@@ -765,11 +778,13 @@ class DriverComplianceTest extends TestCase
             ]
         ];
 
-        $errors = ServicePropsValidator::validate($validProps);
+        $errors = ProductDefinitionValidator::validate($validDefinition);
         $this->assertEmpty($errors);
 
-        // Invalid ServiceProps (missing trigger ID or target ID in node lists)
-        $invalidProps = [
+        // Invalid ProductDefinition (missing trigger ID or target ID in node lists)
+        $invalidDefinition = [
+            'id' => 'instagram-product',
+            'name' => 'Instagram Product',
             'filters' => [
                 ['id' => 'tag:instagram', 'label' => 'Instagram']
             ],
@@ -783,9 +798,52 @@ class DriverComplianceTest extends TestCase
             ]
         ];
 
-        $errors = ServicePropsValidator::validate($invalidProps);
+        $errors = ProductDefinitionValidator::validate($invalidDefinition);
         $this->assertNotEmpty($errors);
         $this->assertArrayHasKey('option_effects_for_buttons.field:missing-trigger', $errors);
+
+        $missingIdentityErrors = ProductDefinitionValidator::validate([
+            'filters' => [],
+            'fields' => [],
+        ]);
+        $this->assertArrayHasKey('id', $missingIdentityErrors);
+        $this->assertArrayHasKey('name', $missingIdentityErrors);
+    }
+
+    public function testProductDefinitionHydrationPreservesWireShape(): void
+    {
+        $data = [
+            'id' => 'instagram-product',
+            'name' => 'Instagram Product',
+            'filters' => [
+                ['id' => 'tag:instagram', 'label' => 'Instagram'],
+            ],
+            'fields' => [
+                ['id' => 'field:premium', 'type' => 'toggle', 'label' => 'Premium'],
+            ],
+            'order_for_tags' => ['tag:instagram' => ['field:premium']],
+            'includes_for_buttons' => ['field:premium' => ['field:premium']],
+            'excludes_for_buttons' => [],
+            'option_effects_for_buttons' => [
+                'field:premium' => [
+                    'field:premium' => ['forceVisible' => true],
+                ],
+            ],
+            'value_effects_for_triggers' => [],
+            'schema_version' => '1',
+            'fallbacks' => ['tag:instagram' => ['tag:instagram-fallback']],
+            'description' => 'A configurable Instagram product.',
+            'notices' => [
+                ['kind' => 'info', 'message' => 'Choose carefully.'],
+            ],
+            'meta' => ['source' => 'test'],
+        ];
+
+        $definition = ProductDefinitionHydrator::hydrate($data);
+
+        $this->assertInstanceOf(ProductDefinition::class, $definition);
+        $this->assertSame($data, ProductDefinitionExtractor::extract($definition));
+        $this->assertArrayNotHasKey('props', ProductDefinitionExtractor::extract($definition));
     }
 
     public function testRuntimeContextPreservesContextAndMeta(): void

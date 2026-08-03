@@ -7,7 +7,7 @@ use Elqora\Dgp\Errors\Result;
 interface SnapshotRevalidationContract
 {
      /**
-      * Revalidate a snapshot against authoritative published ServiceProps revision,
+      * Revalidate a snapshot against the authoritative published ProductDefinition revision,
       * current service state, and host policies.
       *
       * @param mixed $request
