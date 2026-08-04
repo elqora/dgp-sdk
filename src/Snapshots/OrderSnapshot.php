@@ -24,8 +24,8 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
         public OrderSnapshotInputs $inputs,
         public int|float $quantity,
         public OrderSnapshotQuantitySource $quantitySource,
-        public int|float $min,
-        public int|float $max,
+        public int $min,
+        public int $max,
         public array $serviceIds = [],
         public array $serviceIdsByNode = [],
         public ?array $fallbacks = null,
@@ -150,12 +150,12 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
         return $this->quantitySource;
     }
 
-    public function min(): int|float
+    public function min(): int
     {
         return $this->min;
     }
 
-    public function max(): int|float
+    public function max(): int
     {
         return $this->max;
     }
@@ -259,11 +259,10 @@ final readonly class OrderSnapshot implements Arrayable, JsonSerializable
         $seen = [];
         $deduplicated = [];
         foreach ($combined as $item) {
-            $normalized = is_numeric($item) ? (int) $item : $item;
-            $seenKey = (string) $normalized;
+            $seenKey = (string) $item;
             if (!isset($seen[$seenKey])) {
                 $seen[$seenKey] = true;
-                $deduplicated[] = $normalized;
+                $deduplicated[] = $item;
             }
         }
 

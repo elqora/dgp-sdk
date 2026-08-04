@@ -690,20 +690,86 @@ class DriverComplianceTest extends TestCase
         $snapshot = OrderSnapshot::fromArray($payload);
 
         // 1. Global-only lookup
-        $this->assertEquals([106, 108], $snapshot->fallbacksFor(103));
+        $this->assertSame([106, '108'], $snapshot->fallbacksFor(103));
         $this->assertEquals(['tag:inst-fallback'], $snapshot->fallbacksFor('tag:instagram-likes'));
 
         // 2. Node-context lookup (deduplicated, preserving node precedence: node [104, 106] + global [106, 108] => [104, 106, 108])
-        $this->assertEquals([104, 106, 108], $snapshot->fallbacksFor(103, 'option:ultra'));
+        $this->assertSame([104, 106, '108'], $snapshot->fallbacksFor(103, 'option:ultra'));
 
         // 3. Unknown service ID returns empty list
         $this->assertEquals([], $snapshot->fallbacksFor(999));
 
         // 4. Unknown node ID fallback returns only global fallbacks
-        $this->assertEquals([106, 108], $snapshot->fallbacksFor(103, 'option:unknown'));
+        $this->assertSame([106, '108'], $snapshot->fallbacksFor(103, 'option:unknown'));
 
         // 5. String/integer key coercion lookup
-        $this->assertEquals([106, 108], $snapshot->fallbacksFor('103'));
+        $this->assertSame([106, '108'], $snapshot->fallbacksFor('103'));
+    }
+
+    public function testOrderSnapshotFallbackLookupPreservesNumericStringIds(): void
+    {
+        $payload = json_decode((string) file_get_contents(__DIR__.'/../Fixtures/Contracts/order-snapshot.json'), true);
+        $payload['fallbacks']['global']['101'] = ['001', 2];
+
+        $snapshot = OrderSnapshot::fromArray($payload);
+
+        $this->assertSame(['001', 2], $snapshot->fallbacksFor(101));
+        $this->assertSame($payload, $snapshot->toArray());
+    }
+
+    public function testOrderSnapshotRejectsInvalidNestedWireValues(): void
+    {
+        $fixture = json_decode((string) file_get_contents(__DIR__.'/../Fixtures/Contracts/order-snapshot.json'), true);
+        $invalidPayloads = [];
+
+        $payload = $fixture;
+        $payload['selection']['trigger_ids'] = [123];
+        $invalidPayloads['trigger identity'] = $payload;
+
+        $payload = $fixture;
+        $payload['inputs']['form']['invalid'] = INF;
+        $invalidPayloads['non-finite form input'] = $payload;
+
+        $payload = $fixture;
+        $payload['quantity_source']['defaulted_from_host'] = true;
+        $invalidPayloads['quantity source discriminator'] = $payload;
+
+        $payload = $fixture;
+        $payload['quantity_source']['rule']['expression'] = ['language' => 'javascript', 'body' => 'return 1;'];
+        $invalidPayloads['expression on non-eval rule'] = $payload;
+
+        $payload = $fixture;
+        $payload['service_ids_by_node']['premium'] = [new \stdClass()];
+        $invalidPayloads['service identity'] = $payload;
+
+        $payload = $fixture;
+        $payload['fallbacks']['unknown'] = [];
+        $invalidPayloads['fallback shape'] = $payload;
+
+        $payload = $fixture;
+        $payload['utilities'][0]['inputs']['base_amount'] = NAN;
+        $invalidPayloads['non-finite utility input'] = $payload;
+
+        $payload = $fixture;
+        $payload['meta']['invalid'] = static fn (): null => null;
+        $invalidPayloads['non-JSON meta'] = $payload;
+
+        $payload = $fixture;
+        $payload['built_at'] = 'next Tuesday';
+        $invalidPayloads['date-time format'] = $payload;
+
+        $payload = $fixture;
+        $payload['built_at'] = '2026-02-31T12:00:00Z';
+        $invalidPayloads['invalid calendar date'] = $payload;
+
+        foreach ($invalidPayloads as $description => $payload) {
+            try {
+                OrderSnapshot::fromArray($payload);
+                $this->fail("Accepted invalid OrderSnapshot {$description}.");
+            } catch (\InvalidArgumentException $exception) {
+                $this->assertStringContainsString('does not conform', $exception->getMessage(), $description);
+            }
+        }
     }
 
     public function testProductDefinitionValidationInvariant(): void

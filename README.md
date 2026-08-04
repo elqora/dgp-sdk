@@ -158,6 +158,10 @@ public function validateConfig(?ConfigBag $config = null): ConfigValidationResul
 ## Order Snapshots
 
 `OrderSnapshot` is the semantic description of what the customer ordered. Host identity such as `orderId` and execution context such as `RuntimeContext` are useful runtime metadata, but the snapshot remains the resolved order description.
+Hydration validates the complete nested DGP v1 wire shape, JSON compatibility,
+finite numeric values, quantity-source discriminators, and utility evidence
+before constructing the DTO. String and integer service identities are
+preserved losslessly, including numeric-looking string IDs.
 
 ```php
 use Elqora\Dgp\Snapshots\OrderSnapshot;
