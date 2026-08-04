@@ -1,0 +1,22 @@
+{
+  "id": "invalid-camel-effect",
+  "name": "Invalid camel effect",
+  "filters": [],
+  "fields": [],
+  "order_for_tags": {},
+  "includes_for_buttons": {},
+  "excludes_for_buttons": {},
+  "option_effects_for_buttons": {
+    "option:premium": {
+      "field:notes": {
+        "forceVisible": true
+      }
+    }
+  },
+  "value_effects_for_triggers": {},
+  "schema_version": "1",
+  "fallbacks": null,
+  "description": null,
+  "notices": [],
+  "meta": {}
+}

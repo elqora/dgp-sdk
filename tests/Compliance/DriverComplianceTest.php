@@ -873,11 +873,18 @@ class DriverComplianceTest extends TestCase
             ],
             'value_effects_for_triggers' => [],
             'schema_version' => '1',
-            'fallbacks' => ['tag:instagram' => ['tag:instagram-fallback']],
-            'description' => 'A configurable Instagram product.',
-            'notices' => [
-                ['kind' => 'info', 'message' => 'Choose carefully.'],
+            'fallbacks' => [
+                'nodes' => ['tag:instagram' => ['service:instagram-fallback']],
             ],
+            'description' => 'A configurable Instagram product.',
+            'notices' => [[
+                'id' => 'notice:choose-carefully',
+                'type' => 'public',
+                'kind' => 'warning',
+                'severity' => 'info',
+                'target' => ['scope' => 'global'],
+                'title' => 'Choose carefully.',
+            ]],
             'meta' => ['source' => 'test'],
         ];
 

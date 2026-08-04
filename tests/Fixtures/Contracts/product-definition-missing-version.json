@@ -1,0 +1,15 @@
+{
+  "id": "missing-version",
+  "name": "Missing version",
+  "filters": [],
+  "fields": [],
+  "order_for_tags": {},
+  "includes_for_buttons": {},
+  "excludes_for_buttons": {},
+  "option_effects_for_buttons": {},
+  "value_effects_for_triggers": {},
+  "fallbacks": null,
+  "description": null,
+  "notices": [],
+  "meta": {}
+}

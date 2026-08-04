@@ -1,0 +1,29 @@
+{
+  "id": "invalid-expression",
+  "name": "Invalid expression",
+  "filters": [],
+  "fields": [
+    {
+      "id": "field:quantity",
+      "type": "number",
+      "label": "Quantity",
+      "quantity": {
+        "value_by": "eval",
+        "expression": {
+          "language": "javascript"
+        }
+      },
+      "button": false
+    }
+  ],
+  "order_for_tags": {},
+  "includes_for_buttons": {},
+  "excludes_for_buttons": {},
+  "option_effects_for_buttons": {},
+  "value_effects_for_triggers": {},
+  "schema_version": "1",
+  "fallbacks": null,
+  "description": null,
+  "notices": [],
+  "meta": {}
+}

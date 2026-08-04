@@ -68,6 +68,48 @@ final class SpecContractConformanceTest extends TestCase
         self::assertCanonicalJson('product-definition.json', $definition);
     }
 
+    public function testProductDefinitionBindingPreservesExplicitVariantAndMultipleSelection(): void
+    {
+        $fixture = self::fixture('product-definition.json');
+        $fixture['fields'][0]['variant'] = 'compact';
+        $fixture['fields'][0]['multiple'] = true;
+
+        $definition = ProductDefinitionHydrator::hydrate($fixture);
+        $this->assertSame($fixture, ProductDefinitionExtractor::extract($definition));
+    }
+
+    public function testProductDefinitionValidatorCoversNestedCanonicalFamilies(): void
+    {
+        $fixture = self::fixture('product-definition.json');
+        $mutations = [
+            'unknown filter property' => static function (array &$value): void { $value['filters'][0]['flags'] = []; },
+            'invalid capability requirement' => static function (array &$value): void { $value['filters'][0]['capabilities']['refill'] = 'yes'; },
+            'invalid field variant' => static function (array &$value): void { $value['fields'][0]['variant'] = 1; },
+            'invalid field binding' => static function (array &$value): void { $value['fields'][0]['bind_id'] = ['bad' => true]; },
+            'non-object defaults' => static function (array &$value): void { $value['fields'][0]['defaults'] = ['a', 'b']; },
+            'unknown recursive option key' => static function (array &$value): void {
+                $value['fields'][1]['options'][0]['children'] = [['id' => 'child', 'label' => 'Child', 'legacy' => true]];
+            },
+            'non-primitive option value' => static function (array &$value): void { $value['fields'][1]['options'][0]['value'] = ['bad']; },
+            'invalid quantity expression' => static function (array &$value): void {
+                $value['fields'][0]['quantity'] = ['value_by' => 'eval', 'expression' => ['language' => 'javascript', 'body' => '', 'callback' => 'x']];
+            },
+            'invalid validation operator' => static function (array &$value): void { $value['fields'][0]['validation'] = [['op' => 'contains']]; },
+            'invalid utility mode' => static function (array &$value): void { $value['fields'][0]['utility'] = ['rate' => 1, 'mode' => 'authoritative']; },
+            'invalid option effect key' => static function (array &$value): void { $value['option_effects_for_buttons']['option:premium']['field:notes']['forceVisible'] = true; },
+            'invalid value effect mode' => static function (array &$value): void { $value['value_effects_for_triggers']['option:rush']['field:notes']['mode'] = 'sometimes'; },
+            'invalid fallback map' => static function (array &$value): void { $value['fallbacks']['nodes'] = ['not-a-map']; },
+            'invalid notice kind' => static function (array &$value): void { $value['notices'][0]['kind'] = 'legacy'; },
+            'non-object metadata' => static function (array &$value): void { $value['meta'] = ['not', 'an', 'object']; },
+        ];
+
+        foreach ($mutations as $label => $mutate) {
+            $candidate = $fixture;
+            $mutate($candidate);
+            $this->assertNotSame([], ProductDefinitionValidator::validate($candidate), $label);
+        }
+    }
+
     public function testProductDefinitionRejectsTheRemovedFieldComponentProperty(): void
     {
         $fixture = self::fixture('product-definition-component-property.json');
@@ -84,9 +126,34 @@ final class SpecContractConformanceTest extends TestCase
         ProductDefinitionHydrator::hydrate($fixture);
     }
 
+    /** @dataProvider invalidProductDefinitionFixtures */
+    public function testProductDefinitionRejectsEveryRatifiedInvalidStructuralFixture(string $fixtureName): void
+    {
+        $errors = ProductDefinitionValidator::validate(self::fixture($fixtureName));
+        $this->assertNotSame([], $errors, "Expected {$fixtureName} to be rejected.");
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidProductDefinitionFixtures(): iterable
+    {
+        yield 'camel-case effect' => ['product-definition-camel-case-effect.json'];
+        yield 'missing expression body' => ['product-definition-expression-missing-body.json'];
+        yield 'missing schema version' => ['product-definition-missing-version.json'];
+        yield 'removed component' => ['product-definition-component-property.json'];
+        yield 'derived capabilities' => ['product-definition-derived-capabilities.json'];
+    }
+
     public function testServiceCapabilityRejectsNullMeta(): void
     {
         $fixture = self::fixture('service-capability-null-meta.json');
+        $this->expectException(InvalidArgumentException::class);
+
+        Hydrator::hydrate(ServiceCapability::class, $fixture);
+    }
+
+    public function testServiceCapabilityRejectsMissingEnabledState(): void
+    {
+        $fixture = self::fixture('service-capability-missing-enabled.json');
         $this->expectException(InvalidArgumentException::class);
 
         Hydrator::hydrate(ServiceCapability::class, $fixture);
