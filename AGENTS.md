@@ -23,14 +23,22 @@ Ratified means the versioned plain TypeScript contract, required JSON fixtures, 
 
 ## Clean-break rule
 
-DGP v1 conformance does not require legacy adapters, aliases, deprecated fields, compatibility modes, or support for old frontend definitions. Existing implementation details are evidence for unratified behavior, not automatic protocol contracts.
+DGP v1 conformance does not require legacy adapters, aliases, deprecated fields, compatibility modes, or support for old frontend definitions. This representation clean break does not authorize the loss of proven backend behavior or incomplete implementation of ratified shared contracts.
+
+## Migration and conformance completeness
+
+- Preserve SDK-owned handler, service, capability, runtime, rate, charge, plan, delivery, action, and fulfillment semantics by default. Intentional redesign requires explicit recorded user approval and coordinated Spec work when shared representation changes.
+- Implement complete structural conformance for every applicable ratified Spec contract. A hand-written validator covering only selected fields or fixtures is not sufficient.
+- Consume and verify every applicable valid, invalid, round-trip, and semantic Spec fixture. Missing fixture coverage is **pending conformance**, not implicit acceptance or retirement.
+- Keep backend validation of order inputs and authoritative pricing complete while accepting that browser-only expression execution remains outside this SDK.
+- Do not call an SDK binding conformant or publish another stable release while applicable ratified fixtures, nested wire rules, or lossless round trips remain unimplemented.
 
 ## Change workflow and operations
 
 - Start SDK-owned domain changes here and coordinate any shared wire impact with Spec. After ratification, align SDK serialization alongside corresponding Core work before dependent releases.
 - Commit and release this repository independently.
 - The current PHP toolchain is real: install with `composer install`; run tests with `composer test`, static analysis with `composer analyse`, contract and dependency drift checks with `composer check:contracts`, and the full completion check with `composer check`.
-- Spec conformance fixtures under `tests/Fixtures/Contracts` are committed interoperability evidence. `composer check:contracts` verifies their JSON and compares them with a sibling `dgp-spec` checkout when one is present.
+- Spec conformance fixtures under `tests/Fixtures/Contracts` are committed interoperability evidence. `composer check:contracts` must cover every applicable ratified fixture and compare it with a sibling `dgp-spec` checkout when one is present; a selected subset is not complete conformance.
 - No generated PHP protocol binding exists. The SDK's DTOs remain hand-authored language bindings and their fixture round trips mechanically guard canonical-field drift.
 
 ## References
