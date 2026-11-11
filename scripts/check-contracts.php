@@ -15,8 +15,10 @@ $fixtures = [
     'invalid/product-definition-camel-case-effect.json' => 'product-definition-camel-case-effect.json',
     'invalid/product-definition-derived-capabilities.json' => 'product-definition-derived-capabilities.json',
     'invalid/product-definition-expression-missing-body.json' => 'product-definition-expression-missing-body.json',
+    'invalid/product-definition-invalid-error-message-on.json' => 'product-definition-invalid-error-message-on.json',
     'invalid/product-definition-missing-version.json' => 'product-definition-missing-version.json',
     'invalid/product-definition-component-property.json' => 'product-definition-component-property.json',
+    'invalid/product-definition-visibility-expression-missing-body.json' => 'product-definition-visibility-expression-missing-body.json',
     'valid/order-snapshot.json' => 'order-snapshot.json',
     'invalid/order-snapshot-camel-case.json' => 'order-snapshot-camel-case.json',
 ];

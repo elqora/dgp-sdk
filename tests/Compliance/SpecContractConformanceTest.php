@@ -138,6 +138,8 @@ final class SpecContractConformanceTest extends TestCase
     {
         yield 'camel-case effect' => ['product-definition-camel-case-effect.json'];
         yield 'missing expression body' => ['product-definition-expression-missing-body.json'];
+        yield 'invalid validation message timing' => ['product-definition-invalid-error-message-on.json'];
+        yield 'missing visibility expression body' => ['product-definition-visibility-expression-missing-body.json'];
         yield 'missing schema version' => ['product-definition-missing-version.json'];
         yield 'removed component' => ['product-definition-component-property.json'];
         yield 'derived capabilities' => ['product-definition-derived-capabilities.json'];

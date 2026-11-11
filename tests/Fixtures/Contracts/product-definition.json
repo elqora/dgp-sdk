@@ -21,6 +21,10 @@
       "id": "field:quantity",
       "type": "number",
       "label": "Quantity",
+      "visibility_expression": {
+        "language": "javascript",
+        "body": "return preview.service_context.length > 0;"
+      },
       "bind_id": "tag:instagram",
       "name": "quantity",
       "required": true,
@@ -35,7 +39,8 @@
           "op": "gte",
           "value": 100,
           "code": "quantity_too_small",
-          "message": "Quantity must be at least 100."
+          "message": "Quantity must be at least 100.",
+          "error_message_on": "change"
         }
       ],
       "quantity": {
@@ -66,6 +71,10 @@
         {
           "id": "option:premium",
           "label": "Premium",
+          "visibility_expression": {
+            "language": "javascript",
+            "body": "return Boolean(preview.service_context[0]?.capabilities.refill?.enabled);"
+          },
           "value": "premium",
           "service_id": 102,
           "pricing_role": "base",

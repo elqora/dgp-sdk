@@ -153,7 +153,7 @@ final class ProductDefinitionValidator
         self::knownKeys($field, [
             'id', 'type', 'variant', 'label', 'bind_id', 'name', 'required', 'multiple',
             'default_value', 'defaults', 'options', 'description', 'pricing_role', 'validation',
-            'quantity_default', 'quantity', 'utility', 'meta', 'button', 'service_id',
+            'quantity_default', 'quantity', 'utility', 'meta', 'button', 'service_id', 'visibility_expression',
         ], $path, $errors);
         foreach (['id', 'type', 'label'] as $key) {
             if (!is_string($field[$key] ?? null)) $errors["{$path}.{$key}"] = ucfirst($key).' must be a string.';
@@ -183,6 +183,7 @@ final class ProductDefinitionValidator
         }
         self::validateOptionalJsonObject($field, 'defaults', $path, $errors);
         self::validateOptionalJsonObject($field, 'meta', $path, $errors);
+        if (array_key_exists('visibility_expression', $field)) self::validateExpression($field['visibility_expression'], "{$path}.visibility_expression", $errors);
         if (array_key_exists('pricing_role', $field) && !in_array($field['pricing_role'], ['base', 'utility'], true)) {
             $errors["{$path}.pricing_role"] = 'Pricing_role is invalid.';
         }
@@ -212,7 +213,7 @@ final class ProductDefinitionValidator
             }
             self::knownKeys($option, [
                 'id', 'label', 'value', 'service_id', 'pricing_role', 'quantity_default',
-                'utility', 'meta', 'children',
+                'utility', 'meta', 'children', 'visibility_expression',
             ], $optionPath, $errors);
             if (!is_string($option['id'] ?? null)) $errors["{$optionPath}.id"] = 'Option id must be a string.';
             if (!is_string($option['label'] ?? null)) $errors["{$optionPath}.label"] = 'Option label must be a string.';
@@ -227,6 +228,7 @@ final class ProductDefinitionValidator
             }
             self::validateOptionalFinite($option, 'quantity_default', $optionPath, $errors);
             self::validateOptionalJsonObject($option, 'meta', $optionPath, $errors);
+            if (array_key_exists('visibility_expression', $option)) self::validateExpression($option['visibility_expression'], "{$optionPath}.visibility_expression", $errors);
             if (array_key_exists('utility', $option)) self::validateUtility($option['utility'], "{$optionPath}.utility", $errors);
             if (array_key_exists('children', $option)) self::validateOptions($option['children'], "{$optionPath}.children", $errors);
         }
@@ -247,7 +249,7 @@ final class ProductDefinitionValidator
             }
             self::knownKeys($rule, [
                 'op', 'value_by', 'expression', 'value', 'min', 'max', 'values',
-                'pattern', 'pattern_flags', 'code', 'message',
+                'pattern', 'pattern_flags', 'code', 'message', 'error_message_on',
             ], $rulePath, $errors);
             if (!in_array($rule['op'] ?? null, ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between', 'in', 'nin', 'truthy', 'falsy', 'match'], true)) {
                 $errors["{$rulePath}.op"] = 'Validation operator is invalid.';
@@ -264,6 +266,9 @@ final class ProductDefinitionValidator
             }
             foreach (['pattern', 'pattern_flags', 'code', 'message'] as $key) {
                 if (array_key_exists($key, $rule) && !is_string($rule[$key])) $errors["{$rulePath}.{$key}"] = ucfirst($key).' must be a string.';
+            }
+            if (array_key_exists('error_message_on', $rule) && !in_array($rule['error_message_on'], ['submit', 'change'], true)) {
+                $errors["{$rulePath}.error_message_on"] = 'Error_message_on must be submit or change.';
             }
         }
     }

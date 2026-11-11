@@ -1,0 +1,27 @@
+{
+  "id": "invalid-visibility-expression",
+  "name": "Invalid visibility expression",
+  "filters": [],
+  "fields": [
+    {
+      "id": "field:notes",
+      "type": "text",
+      "label": "Notes",
+      "visibility_expression": {
+        "language": "javascript",
+        "body": ""
+      },
+      "button": false
+    }
+  ],
+  "order_for_tags": {},
+  "includes_for_buttons": {},
+  "excludes_for_buttons": {},
+  "option_effects_for_buttons": {},
+  "value_effects_for_triggers": {},
+  "schema_version": "1",
+  "fallbacks": null,
+  "description": null,
+  "notices": [],
+  "meta": {}
+}
