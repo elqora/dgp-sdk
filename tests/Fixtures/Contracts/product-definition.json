@@ -23,7 +23,7 @@
       "label": "Quantity",
       "visibility_expression": {
         "language": "javascript",
-        "body": "return preview.service_context.length > 0;"
+        "body": "preview.service_context.length > 0"
       },
       "bind_id": "tag:instagram",
       "name": "quantity",
@@ -73,7 +73,7 @@
           "label": "Premium",
           "visibility_expression": {
             "language": "javascript",
-            "body": "return Boolean(preview.service_context[0]?.capabilities.refill?.enabled);"
+            "body": "Boolean(preview.service_context[0]?.capabilities.refill?.enabled)"
           },
           "value": "premium",
           "service_id": 102,
